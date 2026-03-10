@@ -1,7 +1,7 @@
 export const disposalMaterials = {
   glass: {
     it: "Bottiglia di Vetro",
-    de: "Glaskohle",
+    de: "Glasflasche",
     fr: "Bouteille en Verre",
     es: "Botella de Vidrio",
     ja: "ガラス瓶",
@@ -73,10 +73,10 @@ export const disposalMaterials = {
 
 export const getMaterialName = (materialType, lang) => {
   const material = disposalMaterials[materialType]
-  return material ? material[lang] || material['en'] : materialType
+  return material ? material[lang] || material['it'] : materialType
 }
 
 export const getMaterialCollection = (materialType, lang) => {
   const material = disposalMaterials[materialType]
-  return material ? material.collection[lang] || material.collection['en'] : 'General waste'
+  return material ? material.collection[lang] || material.collection['it'] : 'Rifiuti Generici'
 }
