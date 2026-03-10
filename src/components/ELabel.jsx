@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { products } from '../data/products'
 import { getImporterByCountry } from '../data/importers'
 import { fetchProducts } from '../services/airtable'
+import { fetchShopifyProducts, matchProducts } from '../services/shopify'
 import DisposalIcon from './DisposalIcon'
 import NutritionTable from './NutritionTable'
 
@@ -11,6 +12,51 @@ import NutritionTable from './NutritionTable'
  * Parse packagingMaterials string (e.g. "Vetro trasparente GL 72, Tappo alluminio C/ALU 90")
  * into structured disposal data
  */
+/**
+ * Map bottle color descriptions to EU glass recycling codes:
+ * GL 70 = Transparent/colorless glass (vetro trasparente/bianco/incolore)
+ * GL 71 = Green glass (vetro verde)
+ * GL 72 = Brown/dark glass (vetro marrone/scuro/ambra)
+ *
+ * Approximations for non-standard colors:
+ * - Blue/azzurro → GL 72 (dark glass)
+ * - Black/nero → GL 72 (dark glass)
+ * - Yellow/giallo → GL 70 (transparent)
+ */
+function getGlassCode(colorDescription) {
+  if (!colorDescription) return 'GL 72' // default to brown
+
+  const lower = colorDescription.toLowerCase()
+
+  // Check for explicit GL codes first
+  const glMatch = lower.match(/gl\s*(\d+)/)
+  if (glMatch) return `GL ${glMatch[1]}`
+
+  // Transparent / clear / white
+  if (lower.includes('trasparente') || lower.includes('transparent') ||
+      lower.includes('bianco') || lower.includes('white') ||
+      lower.includes('incolore') || lower.includes('clear') ||
+      lower.includes('giallo') || lower.includes('yellow')) {
+    return 'GL 70'
+  }
+
+  // Green
+  if (lower.includes('verde') || lower.includes('green')) {
+    return 'GL 71'
+  }
+
+  // Brown / dark / amber / blue / black (approximate to brown)
+  if (lower.includes('marrone') || lower.includes('brown') ||
+      lower.includes('scuro') || lower.includes('dark') ||
+      lower.includes('ambra') || lower.includes('amber') ||
+      lower.includes('blu') || lower.includes('blue') ||
+      lower.includes('azzurr') || lower.includes('nero') || lower.includes('black')) {
+    return 'GL 72'
+  }
+
+  return 'GL 72' // default
+}
+
 function parsePackagingMaterials(materialsStr) {
   if (!materialsStr) return null
 
@@ -25,10 +71,16 @@ function parsePackagingMaterials(materialsStr) {
   const parts = materialsStr.split(',').map(s => s.trim())
   for (const part of parts) {
     const lower = part.toLowerCase()
-    // Glass bottle
+    // Glass bottle — detect color for correct GL code
     if (lower.includes('vetro') || lower.includes('glass') || lower.includes('gl ')) {
-      const match = part.match(/GL\s*\d+/i)
-      result.bottleMaterialCode = match ? match[0].toUpperCase() : 'GL 72'
+      // Try to find explicit GL code
+      const glMatch = part.match(/GL\s*\d+/i)
+      if (glMatch) {
+        result.bottleMaterialCode = glMatch[0].toUpperCase().replace(/(\d)/, ' $1').replace(/\s+/g, ' ')
+      } else {
+        // Detect color from description
+        result.bottleMaterialCode = getGlassCode(part)
+      }
     }
     // Aluminum cap
     if (lower.includes('tappo') || lower.includes('cap') || lower.includes('alu')) {
@@ -155,6 +207,17 @@ const ELabel = () => {
 
             setProduct(productData)
             setLoading(false)
+
+            // Fetch Shopify image asynchronously (non-blocking)
+            fetchShopifyProducts().then(shopifyProducts => {
+              if (cancelled || !shopifyProducts?.length) return
+              const shopifyMatches = matchProducts(variants, shopifyProducts)
+              const shopifyMatch = shopifyMatches[first.slug]
+              if (shopifyMatch?.photo) {
+                setProduct(prev => prev ? { ...prev, photo: shopifyMatch.photo } : prev)
+              }
+            }).catch(err => console.warn('[Shopify] Image fetch failed:', err))
+
             return
           }
         }
@@ -228,15 +291,14 @@ const ELabel = () => {
   }
 
   const getMaterialTypeFromCode = (code) => {
-    const codeMap = {
-      'GL 72': 'glass',
-      'GL 71': 'glass',
-      'GL 70': 'glass',
-      'C/ALU 90': 'aluminum',
-      'C/CORK': 'cork',
-      'PVC': 'plastic'
-    }
-    return codeMap[code] || 'glass'
+    if (!code) return 'glass'
+    const upper = code.toUpperCase()
+    if (upper.startsWith('GL')) return 'glass'
+    if (upper.includes('ALU')) return 'aluminum'
+    if (upper.includes('CORK') || upper.includes('SUGHERO')) return 'cork'
+    if (upper.includes('PVC') || upper.includes('PLASTIC')) return 'plastic'
+    if (upper === '20' || upper.includes('PAP')) return 'paper'
+    return 'glass'
   }
 
   // Check if nutrition data is filled
