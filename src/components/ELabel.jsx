@@ -123,6 +123,8 @@ const ELabel = () => {
   const [loading, setLoading] = useState(true)
   const [product, setProduct] = useState(null)
   const [error, setError] = useState(null)
+  const labelRef = useRef(null)
+  const [generatingPdf, setGeneratingPdf] = useState(false)
 
   // Fetch product data from Airtable (with static fallback)
   useEffect(() => {
@@ -281,8 +283,6 @@ const ELabel = () => {
 
   const currentSize = product.sizes[selectedSize]
   const importer = selectedCountry ? getImporterByCountry(selectedCountry) : null
-  const labelRef = useRef(null)
-  const [generatingPdf, setGeneratingPdf] = useState(false)
 
   /**
    * Generate PDF from the rendered e-label using html2canvas + jsPDF
