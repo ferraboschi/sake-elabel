@@ -399,16 +399,31 @@ strong {
   line-height: 1.5;
 }
 
-/* PDF Download Bar */
-.pdf-download-bar {
-  margin: 24px 0 16px;
-  text-align: center;
+/* Warnings Section */
+.warnings-section {
+  margin-bottom: 20px;
 }
 
-.pdf-download-button {
-  padding: 12px 32px;
-  font-size: 15px;
-  letter-spacing: 0.5px;
+.warnings-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.7;
+  color: #333;
+}
+
+.warnings-list li {
+  padding: 4px 0;
+  padding-left: 16px;
+  position: relative;
+}
+
+.warnings-list li::before {
+  content: "\26A0";
+  position: absolute;
+  left: 0;
+  font-size: 12px;
 }
 
 /* Footer */
@@ -1570,8 +1585,7 @@ strong {
   .admin-container,
   .button,
   .button-group,
-  .age-restriction,
-  .pdf-download-bar {
+  .age-restriction {
     display: none;
   }
 

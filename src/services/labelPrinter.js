@@ -25,6 +25,12 @@
  * │ ♻ GL72  ♻ ALU90        │
  * │─────────────────────────│
  * │ Importato da: ...       │
+ * │─────────────────────────│
+ * │ Avvertenze:             │
+ * │ - Gravidanza            │
+ * │ - Minori 18+            │
+ * │ - Stoccaggio            │
+ * │─────────────────────────│
  * │ Cod: xxx  EAN: xxx      │
  * └─────────────────────────┘
  */
@@ -47,6 +53,10 @@ const TRANSLATIONS = {
     carbs: 'Carboidrati', sugars: 'di cui zuccheri', protein: 'Proteine', salt: 'Sale',
     ing: 'Ingredienti', alg: 'Allergeni', imp: 'Importato da',
     disp: 'Smaltimento', code: 'Cod', lot: 'Lotto: vedi confezione',
+    warn: 'Avvertenze',
+    pregnancy: 'Sconsigliato in gravidanza e allattamento.',
+    minor: 'Vietata la vendita ai minori di 18 anni.',
+    storage: 'Conservare in luogo fresco e asciutto, al riparo dalla luce.',
   },
   de: {
     nutri: 'Nährwerte (100 ml)',
@@ -54,6 +64,10 @@ const TRANSLATIONS = {
     carbs: 'Kohlenhydrate', sugars: 'davon Zucker', protein: 'Eiweiß', salt: 'Salz',
     ing: 'Zutaten', alg: 'Allergene', imp: 'Importiert von',
     disp: 'Entsorgung', code: 'Art.-Nr', lot: 'Los: siehe Verpackung',
+    warn: 'Hinweise',
+    pregnancy: 'In Schwangerschaft und Stillzeit nicht empfohlen.',
+    minor: 'Verkauf an Minderjährige unter 18 Jahren verboten.',
+    storage: 'Kühl und trocken lagern, vor Licht schützen.',
   },
   fr: {
     nutri: 'Valeurs nutritives (100 ml)',
@@ -61,6 +75,10 @@ const TRANSLATIONS = {
     carbs: 'Glucides', sugars: 'dont sucres', protein: 'Protéines', salt: 'Sel',
     ing: 'Ingrédients', alg: 'Allergènes', imp: 'Importé par',
     disp: 'Élimination', code: 'Réf', lot: 'Lot : voir emballage',
+    warn: 'Avertissements',
+    pregnancy: 'Déconseillé pendant la grossesse et l\'allaitement.',
+    minor: 'Vente interdite aux mineurs de moins de 18 ans.',
+    storage: 'Conserver dans un endroit frais et sec, à l\'abri de la lumière.',
   },
   es: {
     nutri: 'Valor nutricional (100 ml)',
@@ -68,6 +86,10 @@ const TRANSLATIONS = {
     carbs: 'H. de carbono', sugars: 'de los cuales azúcares', protein: 'Proteínas', salt: 'Sal',
     ing: 'Ingredientes', alg: 'Alérgenos', imp: 'Importado por',
     disp: 'Eliminación', code: 'Cód', lot: 'Lote: ver envase',
+    warn: 'Advertencias',
+    pregnancy: 'No recomendado durante el embarazo y la lactancia.',
+    minor: 'Prohibida la venta a menores de 18 años.',
+    storage: 'Conservar en lugar fresco y seco, protegido de la luz.',
   },
   ja: {
     nutri: '栄養成分 (100ml)',
@@ -75,6 +97,10 @@ const TRANSLATIONS = {
     carbs: '炭水化物', sugars: '糖類', protein: 'たんぱく質', salt: '食塩相当量',
     ing: '原材料', alg: 'アレルゲン', imp: '輸入者',
     disp: '廃棄', code: 'コード', lot: 'ロット：パッケージ参照',
+    warn: '注意事項',
+    pregnancy: '妊娠中・授乳中の方にはお勧めしません。',
+    minor: '18歳未満の方への販売は禁止されています。',
+    storage: '直射日光を避け、涼しく乾燥した場所に保管してください。',
   },
 }
 
@@ -116,6 +142,9 @@ export const generateLabelPDF = (label, options = {}) => {
 
   // Importer
   if (label.importer?.name) calcY += 6 + (label.importer.address ? 3 : 0)
+
+  // Warnings (pregnancy, minors, storage)
+  calcY += 3 + 3 * 2.2 + 1 // header + 3 warning lines + separator
 
   // Footer
   calcY += 4
@@ -256,6 +285,21 @@ export const generateLabelPDF = (label, options = {}) => {
     }
     line()
   }
+
+  // === WARNINGS ===
+  font(FONT.bodySmall, 'bold')
+  doc.text(t.warn + ':', M, y + 1.8)
+  y += 3
+
+  font(FONT.caption, 'normal')
+  const warnings = [t.pregnancy, t.minor, t.storage]
+  warnings.forEach((warn) => {
+    const warnLines = doc.splitTextToSize(warn, CW)
+    doc.text(warnLines, M, y + 1.3)
+    y += warnLines.length * 1.8 + 0.4
+  })
+  y += 0.5
+  line()
 
   // === FOOTER ===
   doc.setTextColor(120)

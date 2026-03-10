@@ -95,5 +95,9 @@
   "viewELabel": "ラベルを表示",
   "viewLabel": "表示",
   "noProductsFound": "製品が見つかりません",
-  "productNotFound": "製品が見つかりません"
+  "productNotFound": "製品が見つかりません",
+  "warnings": "注意事項",
+  "pregnancyWarning": "妊娠中・授乳中の方にはお勧めしません。",
+  "minorWarning": "18歳未満の方への販売は禁止されています。",
+  "storageWarning": "直射日光を避け、涼しく乾燥した場所に保管してください。"
 }

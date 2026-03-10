@@ -95,5 +95,9 @@
   "viewELabel": "Ver Etiqueta",
   "viewLabel": "Ver",
   "noProductsFound": "Ningún producto encontrado",
-  "productNotFound": "Producto no encontrado"
+  "productNotFound": "Producto no encontrado",
+  "warnings": "Advertencias",
+  "pregnancyWarning": "No recomendado durante el embarazo y la lactancia.",
+  "minorWarning": "Prohibida la venta a menores de 18 años.",
+  "storageWarning": "Conservar en lugar fresco y seco, protegido de la luz."
 }
