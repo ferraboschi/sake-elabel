@@ -236,12 +236,15 @@ function normalizeRecord(record) {
 
   const code = get('code') || ''
   const name = get('productName') || ''
-  const slug = name.toLowerCase()
+  // Slug MUST be unique — append product code to avoid duplicates
+  // (e.g. two "Sakurabijin Daiginjo" with different sizes)
+  const nameSlug = name.toLowerCase()
     .replace(/[/]/g, '-')
     .replace(/\s+/g, '-')
     .replace(/[^a-z0-9\-]/g, '')
     .replace(/-+/g, '-')
     .replace(/^-|-$/g, '')
+  const slug = code ? `${nameSlug}-${code.toLowerCase()}` : nameSlug
 
   // Alcohol is stored as decimal (0.15 = 15%)
   const rawAlcohol = get('alcoholPct')
