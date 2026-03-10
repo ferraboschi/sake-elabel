@@ -127,13 +127,12 @@ const AdminPanel = () => {
   const importer = getImporterByCountry(selectedCountry)
   const hasValidImporter = importer && importer.name
 
-  // Readiness check
+  // Readiness check — nutrition and ingredients required for e-label
+  // Materials are NOT required for back label PDF (accessible via QR code)
   const getProductReadiness = (product, lang) => {
     const missing = []
     if (!product.nutrition?.energy_kj && product.nutrition?.energy_kj !== 0) missing.push('nutrition')
     if (!product.ingredients?.[lang]) missing.push(`ingredients_${lang}`)
-    if (!product.bottleMaterialCode) missing.push('bottle_material')
-    if (!product.capMaterialCode) missing.push('cap_material')
     return { ready: missing.length === 0, missing }
   }
 
@@ -662,7 +661,6 @@ const AdminPanel = () => {
                       <th style={{ textAlign: 'left', padding: '10px 14px' }}>Prodotto</th>
                       <th style={{ textAlign: 'center', padding: '10px 8px', width: '70px' }}>Nutrizione</th>
                       <th style={{ textAlign: 'center', padding: '10px 8px', width: '80px' }}>Ingredienti</th>
-                      <th style={{ textAlign: 'center', padding: '10px 8px', width: '70px' }}>Materiali</th>
                       <th style={{ textAlign: 'center', padding: '10px 8px', width: '60px' }}>Stato</th>
                       <th style={{ textAlign: 'center', padding: '10px 8px', width: '70px' }}></th>
                     </tr>
@@ -672,7 +670,6 @@ const AdminPanel = () => {
                       const { ready, missing } = getProductReadiness(product, selectedLanguage)
                       const hasNutrition = !missing.includes('nutrition')
                       const hasIngredients = !missing.includes(`ingredients_${selectedLanguage}`)
-                      const hasMaterials = !missing.includes('bottle_material') && !missing.includes('cap_material')
                       return (
                         <tr key={product.slug} style={{ borderBottom: '1px solid #f0f0f0' }}>
                           <td style={{ padding: '10px 14px' }}>
@@ -681,7 +678,6 @@ const AdminPanel = () => {
                           </td>
                           <td style={{ textAlign: 'center' }}>{hasNutrition ? '\u2705' : '\u274C'}</td>
                           <td style={{ textAlign: 'center' }}>{hasIngredients ? '\u2705' : '\u274C'}</td>
-                          <td style={{ textAlign: 'center' }}>{hasMaterials ? '\u2705' : '\u274C'}</td>
                           <td style={{ textAlign: 'center' }}>
                             <span style={{
                               display: 'inline-block', padding: '2px 8px', borderRadius: '10px', fontSize: '11px', fontWeight: 600,

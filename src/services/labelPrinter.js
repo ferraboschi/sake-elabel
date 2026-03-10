@@ -1,5 +1,5 @@
 /**
- * Label Printer Service — MINIMUM SIZE COMPLIANT
+ * Label Printer Service — BACK LABEL (retro etichetta)
  *
  * EU Regulation 1169/2011 font requirements:
  *   - x-height >= 1.2mm (packaging > 80cm²)
@@ -9,149 +9,202 @@
  *   - 0.9mm x-height → 5pt minimum font
  *
  * QR code: minimum 13×13mm (EU e-label requirement)
+ * Target label: ~55mm × dynamic height
  *
- * Target label: ~55mm × dynamic height (as compact as possible)
+ * NOTE: Nutrition and disposal info are NOT on the back label.
+ *       They are accessed via QR code → e-label web page.
  *
- * Layout (compact 55mm wide):
- * ┌─────────────────────────┐
- * │ NOME PRODOTTO  [QR 15mm]│
- * │ Cantina · ml · %vol     │
- * │─────────────────────────│
- * │ Nutrizione (tabella)    │
- * │─────────────────────────│
- * │ Ingredienti: ...        │
- * │ ALLERGENI: ...          │
- * │─────────────────────────│
- * │ ♻ GL72  ♻ ALU90        │
- * │─────────────────────────│
- * │ Importato da: ...       │
- * │─────────────────────────│
- * │ Avvertenze:             │
- * │ - Gravidanza            │
- * │ - Minori 18+            │
- * │ - Stoccaggio            │
- * │─────────────────────────│
- * │ Cod: xxx  EAN: xxx      │
- * └─────────────────────────┘
+ * Layout:
+ * ┌──────────────────────────────────┐
+ * │ Product Name (EN)                │
+ * │ 日本語名                          │
+ * │ Daiginjo · 精米歩合 50%          │
+ * │──────────────────────────────────│
+ * │ Bevanda alcolica fermentata      │
+ * │ di riso (SAKE)                   │
+ * │──────────────────────────────────│
+ * │ Alcool: 16% Vol.                 │
+ * │ Contenuto: 720ml                 │
+ * │──────────────────────────────────│
+ * │ Ingredienti: riso, malto di      │
+ * │ riso, alcol, acqua               │
+ * │──────────────────────────────────│
+ * │ Prodotto e confez. in Giappone   │
+ * │ Importato da: Sake Company srl   │
+ * │ Via Bianca di Savoia 17, MI      │
+ * │──────────────────────────────────│
+ * │ Avvertenze:                      │
+ * │ Sconsigliato in gravidanza...    │
+ * │ Vietata la vendita ai minori...  │
+ * │ Conservare in luogo fresco...    │
+ * │──────────────────────────────────│
+ * │ Lotto: vedi confezione           │
+ * │──────────────────────────────────│
+ * │ [QR 15mm]    S093-0720           │
+ * │              Konishi Shuzo       │
+ * │              小西酒造（株）       │
+ * │              EAN: 45275380...    │
+ * └──────────────────────────────────┘
  */
 
 import { jsPDF } from 'jspdf'
 
 // Font sizes (pt) — EU compliant minimums
 const FONT = {
-  title: 7.5,       // Product name — slightly larger for readability
-  subtitle: 6.5,    // Winery, volume, alcohol — 1.2mm x-height
-  body: 6.5,        // Nutrition, ingredients — 1.2mm x-height minimum
-  bodySmall: 5.5,   // Sub-rows (sat fat, sugars) — 0.9mm compliant for small labels
-  caption: 5,       // Product code, EAN — 0.9mm x-height minimum
+  title: 7.5,       // Product name EN — prominent
+  titleJp: 7,       // Product name JP
+  subtitle: 6,      // Type, seimaibuai
+  body: 6.5,        // Description, ingredients — 1.2mm x-height
+  bodySmall: 5.5,   // Warnings, importer — 0.9mm compliant
+  caption: 5,       // Product code, EAN, lot — 0.9mm minimum
 }
 
 const TRANSLATIONS = {
   it: {
-    nutri: 'Valori nutrizionali (100 ml)',
-    energy: 'Energia', fat: 'Grassi', satFat: 'di cui saturi',
-    carbs: 'Carboidrati', sugars: 'di cui zuccheri', protein: 'Proteine', salt: 'Sale',
-    ing: 'Ingredienti', alg: 'Allergeni', imp: 'Importato da',
-    disp: 'Smaltimento', code: 'Cod', lot: 'Lotto: vedi confezione',
+    desc: 'Bevanda alcolica fermentata di riso (SAKE)',
+    alc: 'Alcool', vol: 'Vol.', content: 'Contenuto',
+    ing: 'Ingredienti', alg: 'Allergeni',
+    origin: 'Prodotto e confezionato in', imp: 'Importato da',
     warn: 'Avvertenze',
     pregnancy: 'Sconsigliato in gravidanza e allattamento.',
     minor: 'Vietata la vendita ai minori di 18 anni.',
     storage: 'Conservare in luogo fresco e asciutto, al riparo dalla luce.',
+    lot: 'Lotto: vedi sulla confezione',
+    code: 'Cod',
   },
   de: {
-    nutri: 'Nährwerte (100 ml)',
-    energy: 'Energie', fat: 'Fett', satFat: 'ges. Fettsäuren',
-    carbs: 'Kohlenhydrate', sugars: 'davon Zucker', protein: 'Eiweiß', salt: 'Salz',
-    ing: 'Zutaten', alg: 'Allergene', imp: 'Importiert von',
-    disp: 'Entsorgung', code: 'Art.-Nr', lot: 'Los: siehe Verpackung',
+    desc: 'Fermentiertes alkoholisches Reisgetränk (SAKE)',
+    alc: 'Alkohol', vol: 'Vol.', content: 'Inhalt',
+    ing: 'Zutaten', alg: 'Allergene',
+    origin: 'Hergestellt und verpackt in', imp: 'Importiert von',
     warn: 'Hinweise',
     pregnancy: 'In Schwangerschaft und Stillzeit nicht empfohlen.',
     minor: 'Verkauf an Minderjährige unter 18 Jahren verboten.',
     storage: 'Kühl und trocken lagern, vor Licht schützen.',
+    lot: 'Los: siehe Verpackung',
+    code: 'Art.-Nr',
   },
   fr: {
-    nutri: 'Valeurs nutritives (100 ml)',
-    energy: 'Énergie', fat: 'Matières grasses', satFat: 'dont saturés',
-    carbs: 'Glucides', sugars: 'dont sucres', protein: 'Protéines', salt: 'Sel',
-    ing: 'Ingrédients', alg: 'Allergènes', imp: 'Importé par',
-    disp: 'Élimination', code: 'Réf', lot: 'Lot : voir emballage',
+    desc: 'Boisson alcoolique fermentée de riz (SAKE)',
+    alc: 'Alcool', vol: 'Vol.', content: 'Contenu',
+    ing: 'Ingrédients', alg: 'Allergènes',
+    origin: 'Produit et conditionné au', imp: 'Importé par',
     warn: 'Avertissements',
     pregnancy: 'Déconseillé pendant la grossesse et l\'allaitement.',
     minor: 'Vente interdite aux mineurs de moins de 18 ans.',
     storage: 'Conserver dans un endroit frais et sec, à l\'abri de la lumière.',
+    lot: 'Lot : voir emballage',
+    code: 'Réf',
   },
   es: {
-    nutri: 'Valor nutricional (100 ml)',
-    energy: 'Energía', fat: 'Grasas', satFat: 'de las cuales saturadas',
-    carbs: 'H. de carbono', sugars: 'de los cuales azúcares', protein: 'Proteínas', salt: 'Sal',
-    ing: 'Ingredientes', alg: 'Alérgenos', imp: 'Importado por',
-    disp: 'Eliminación', code: 'Cód', lot: 'Lote: ver envase',
+    desc: 'Bebida alcohólica fermentada de arroz (SAKE)',
+    alc: 'Alcohol', vol: 'Vol.', content: 'Contenido',
+    ing: 'Ingredientes', alg: 'Alérgenos',
+    origin: 'Producido y envasado en', imp: 'Importado por',
     warn: 'Advertencias',
     pregnancy: 'No recomendado durante el embarazo y la lactancia.',
     minor: 'Prohibida la venta a menores de 18 años.',
     storage: 'Conservar en lugar fresco y seco, protegido de la luz.',
+    lot: 'Lote: ver envase',
+    code: 'Cód',
   },
   ja: {
-    nutri: '栄養成分 (100ml)',
-    energy: 'エネルギー', fat: '脂質', satFat: '飽和脂肪酸',
-    carbs: '炭水化物', sugars: '糖類', protein: 'たんぱく質', salt: '食塩相当量',
-    ing: '原材料', alg: 'アレルゲン', imp: '輸入者',
-    disp: '廃棄', code: 'コード', lot: 'ロット：パッケージ参照',
+    desc: '日本酒',
+    alc: 'アルコール', vol: '', content: '内容量',
+    ing: '原材料', alg: 'アレルゲン',
+    origin: '製造・瓶詰', imp: '輸入者',
     warn: '注意事項',
     pregnancy: '妊娠中・授乳中の方にはお勧めしません。',
     minor: '18歳未満の方への販売は禁止されています。',
     storage: '直射日光を避け、涼しく乾燥した場所に保管してください。',
+    lot: 'ロット：パッケージ参照',
+    code: 'コード',
   },
 }
 
 /**
- * Generate compact print-ready PDF
+ * Generate compact print-ready back label PDF
  * @param {Object} label - Product + QR + importer data
  * @param {Object} options - Override defaults
  */
 export const generateLabelPDF = (label, options = {}) => {
-  const W = options.widthMm || 55  // minimum practical back-label width
-  const M = 2.5                     // margin mm
-  const CW = W - M * 2             // content width
+  const W = options.widthMm || 55
+  const M = 2.5
+  const CW = W - M * 2
   const lang = label.language || 'it'
   const t = TRANSLATIONS[lang] || TRANSLATIONS.it
-  const qrSize = 15                 // 15mm (above 13mm minimum)
+  const qrSize = 15
 
-  // Phase 1: calculate total height
+  // Helper to measure text height
+  const measureLines = (doc, text, maxW) => {
+    if (!text) return 0
+    return doc.splitTextToSize(text, maxW).length
+  }
+
+  // --- Phase 1: measure total height ---
+  const tmpDoc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: [W, 200] })
   let calcY = M
 
-  // Product header
-  calcY += 3 // title
-  calcY += 2.5 // subtitle
+  // Product header: name EN
+  tmpDoc.setFontSize(FONT.title)
+  const nameLines = tmpDoc.splitTextToSize(label.name || '', CW)
+  calcY += nameLines.length * 3 + 0.5
+
+  // Name JP
+  if (label.nameJp) calcY += 3
+
+  // Type + seimaibuai
+  if (label.category) calcY += 2.5
+
   calcY += 1 // separator
 
-  // QR + nutrition side by side
-  const nutritionHeight = 7 * 2.2 + 3 // 7 rows × 2.2mm + header
-  calcY += Math.max(qrSize, nutritionHeight) + 1.5
+  // Description (Bevanda alcolica...)
+  tmpDoc.setFontSize(FONT.body)
+  const descLines = tmpDoc.splitTextToSize(t.desc, CW)
+  calcY += descLines.length * 2.2 + 1.5
+
+  // Alcohol + Volume
+  calcY += 5 + 1
 
   // Ingredients
   const ingText = label.ingredients?.[lang] || ''
-  if (ingText) calcY += 2.5 + Math.ceil(ingText.length / 35) * 2.2 + 1
+  if (ingText) {
+    tmpDoc.setFontSize(FONT.body)
+    calcY += 2.5 + measureLines(tmpDoc, ingText, CW) * 2.2 + 0.5
+  }
   const algText = label.allergens?.[lang] || ''
-  if (algText) calcY += 3
+  if (algText) calcY += 2.5
+  if (ingText || algText) calcY += 1
 
-  calcY += 1 // separator
+  // Origin + Importer
+  if (label.countryOfOrigin || label.importer?.name) {
+    if (label.countryOfOrigin) calcY += 2.5
+    if (label.importer?.name) calcY += 2.5
+    if (label.importer?.address) {
+      tmpDoc.setFontSize(FONT.caption)
+      calcY += measureLines(tmpDoc, label.importer.address, CW) * 1.8
+    }
+    calcY += 1
+  }
 
-  // Disposal
-  if (label.bottleMaterialCode || label.capMaterialCode) calcY += 4.5
+  // Warnings
+  calcY += 2.5 // header
+  tmpDoc.setFontSize(FONT.caption)
+  const warnings = [t.pregnancy, t.minor, t.storage]
+  warnings.forEach(w => {
+    calcY += measureLines(tmpDoc, w, CW) * 1.8 + 0.3
+  })
+  calcY += 1.5
 
-  // Importer
-  if (label.importer?.name) calcY += 6 + (label.importer.address ? 3 : 0)
+  // Lot
+  calcY += 2.5 + 1
 
-  // Warnings (pregnancy, minors, storage)
-  calcY += 3 + 3 * 2.2 + 1 // header + 3 warning lines + separator
+  // Footer with QR
+  calcY += Math.max(qrSize, 12) + 1
 
-  // Footer
-  calcY += 4
+  const H = Math.max(calcY + M, 40)
 
-  const H = Math.max(calcY + M, 40) // minimum 40mm height
-
-  // Phase 2: render
+  // --- Phase 2: render ---
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: [W, H] })
   let y = M
 
@@ -167,66 +220,53 @@ export const generateLabelPDF = (label, options = {}) => {
     y += 1
   }
 
-  // === HEADER: Name + QR inline ===
+  // === PRODUCT HEADER ===
+  // Name EN — bold, full width
   font(FONT.title, 'bold')
-  const nameMaxW = CW - qrSize - 2
-  const nameLines = doc.splitTextToSize(label.name || '', nameMaxW)
-  doc.text(nameLines, M, y + 2.5)
+  const renderedNameLines = doc.splitTextToSize(label.name || '', CW)
+  doc.text(renderedNameLines, M, y + 2.5)
+  y += renderedNameLines.length * 3 + 0.5
 
-  // QR in top-right
-  const qrX = W - M - qrSize
-  const qrY = y
-  if (label.qr) {
-    try { doc.addImage(label.qr, 'PNG', qrX, qrY, qrSize, qrSize) }
-    catch { doc.rect(qrX, qrY, qrSize, qrSize) }
+  // Name JP
+  if (label.nameJp) {
+    font(FONT.titleJp, 'normal')
+    doc.text(label.nameJp, M, y + 2)
+    y += 3
   }
 
-  y += nameLines.length * 2.8 + 0.5
+  // Type + Seimaibuai on same line
+  if (label.category) {
+    font(FONT.subtitle, 'italic')
+    doc.setTextColor(80)
+    let typeLine = label.category
+    if (label.seimaibuai) typeLine += `  ·  精米歩合 ${label.seimaibuai}%`
+    doc.text(typeLine, M, y + 1.8)
+    y += 2.5
+    doc.setTextColor(0)
+  }
 
-  // Subtitle
-  font(FONT.subtitle, 'normal')
-  doc.setTextColor(80)
-  const sub = [label.winery, label.volumeMl ? `${label.volumeMl}ml` : '', label.alcoholPct ? `${label.alcoholPct}% vol.` : ''].filter(Boolean).join(' · ')
-  doc.text(sub, M, y + 2, { maxWidth: nameMaxW })
-  y += 3
-  doc.setTextColor(0)
-
-  // Make sure y is past QR
-  y = Math.max(y, qrY + qrSize + 1)
   line()
 
-  // === NUTRITION TABLE ===
-  font(FONT.bodySmall, 'bold')
-  doc.text(t.nutri, M, y + 2)
-  y += 3
+  // === PRODUCT DESCRIPTION ===
+  font(FONT.body, 'italic')
+  doc.setTextColor(60)
+  const descLinesR = doc.splitTextToSize(t.desc, CW)
+  doc.text(descLinesR, M, y + 2)
+  y += descLinesR.length * 2.2 + 0.5
+  doc.setTextColor(0)
 
-  const nutrition = label.nutrition || {}
-  const rows = [
-    [t.energy, `${nutrition.energy_kj || 0} kJ / ${nutrition.energy_kcal || 0} kcal`],
-    [t.fat, `${nutrition.fat || 0} g`],
-    [t.satFat, `  ${nutrition.saturated_fat || 0} g`],
-    [t.carbs, `${nutrition.carbs || 0} g`],
-    [t.sugars, `  ${nutrition.sugars || 0} g`],
-    [t.protein, `${nutrition.protein || 0} g`],
-    [t.salt, `${nutrition.salt || 0} g`],
-  ]
+  line()
 
-  const rowH = 2.2
-  font(FONT.caption, 'normal')
-  rows.forEach(([lbl, val], i) => {
-    const ry = y + i * rowH
-    if (i % 2 === 0) {
-      doc.setFillColor(245, 245, 245)
-      doc.rect(M, ry - 0.3, CW, rowH, 'F')
-    }
-    const isIndented = lbl.startsWith('  ')
-    const indent = isIndented ? 1.5 : 0
-    font(isIndented ? FONT.caption : FONT.bodySmall, 'normal')
-    doc.text(lbl.trim(), M + 0.5 + indent, ry + 1.4)
-    doc.text(val, W - M - 0.5, ry + 1.4, { align: 'right' })
-  })
-
-  y += rows.length * rowH + 1
+  // === ALCOHOL + VOLUME ===
+  font(FONT.body, 'normal')
+  if (label.alcoholPct) {
+    doc.text(`${t.alc}: ${label.alcoholPct}% ${t.vol}`, M, y + 2)
+    y += 2.5
+  }
+  if (label.volumeMl) {
+    doc.text(`${t.content}: ${label.volumeMl}ml`, M, y + 2)
+    y += 2.5
+  }
   line()
 
   // === INGREDIENTS ===
@@ -241,7 +281,7 @@ export const generateLabelPDF = (label, options = {}) => {
     y += ingLines.length * 2.2 + 0.5
   }
 
-  // Allergens — bold, uppercase per EU
+  // Allergens — bold uppercase per EU
   if (algText) {
     font(FONT.body, 'bold')
     const algLine = t.alg + ': ' + algText.toUpperCase()
@@ -252,67 +292,98 @@ export const generateLabelPDF = (label, options = {}) => {
 
   if (ingText || algText) line()
 
-  // === DISPOSAL ===
-  const materials = []
-  if (label.bottleMaterialCode) materials.push(label.bottleMaterialCode)
-  if (label.capMaterialCode) materials.push(label.capMaterialCode)
-
-  if (materials.length > 0) {
-    font(FONT.bodySmall, 'bold')
-    doc.text(t.disp + ':', M, y + 1.8)
-
+  // === ORIGIN + IMPORTER ===
+  if (label.countryOfOrigin) {
     font(FONT.bodySmall, 'normal')
-    doc.text(materials.join('  |  '), M + doc.getTextWidth(t.disp + ':  '), y + 1.8)
-    y += 3
-    line()
+    doc.text(`${t.origin} ${label.countryOfOrigin}`, M, y + 1.8)
+    y += 2.5
   }
 
-  // === IMPORTER ===
   if (label.importer?.name) {
     font(FONT.bodySmall, 'bold')
-    doc.text(t.imp + ':', M, y + 1.8)
+    doc.text(`${t.imp}: ${label.importer.name}`, M, y + 1.8)
     y += 2.5
-
-    font(FONT.bodySmall, 'normal')
-    doc.text(label.importer.name, M, y + 1.5)
-    y += 2.2
 
     if (label.importer.address) {
       font(FONT.caption, 'normal')
       const addrLines = doc.splitTextToSize(label.importer.address, CW)
       doc.text(addrLines, M, y + 1.3)
-      y += addrLines.length * 1.8 + 0.5
+      y += addrLines.length * 1.8
     }
-    line()
   }
+
+  if (label.countryOfOrigin || label.importer?.name) line()
 
   // === WARNINGS ===
   font(FONT.bodySmall, 'bold')
   doc.text(t.warn + ':', M, y + 1.8)
-  y += 3
+  y += 2.8
 
   font(FONT.caption, 'normal')
-  const warnings = [t.pregnancy, t.minor, t.storage]
   warnings.forEach((warn) => {
     const warnLines = doc.splitTextToSize(warn, CW)
     doc.text(warnLines, M, y + 1.3)
-    y += warnLines.length * 1.8 + 0.4
+    y += warnLines.length * 1.8 + 0.3
   })
   y += 0.5
   line()
 
-  // === FOOTER ===
-  doc.setTextColor(120)
+  // === LOT ===
   font(FONT.caption, 'normal')
-  const footerParts = []
-  if (label.code) footerParts.push(`${t.code}: ${label.code}`)
-  if (label.barcode) footerParts.push(`EAN: ${label.barcode}`)
-  if (footerParts.length) {
-    doc.text(footerParts.join('  |  '), M, y + 1.5)
-    y += 2
-  }
+  doc.setTextColor(80)
   doc.text(t.lot, M, y + 1.5)
+  y += 2.5
   doc.setTextColor(0)
+  line()
+
+  // === FOOTER: QR left + info right ===
+  const qrX = M
+  const qrY = y + 0.5
+
+  // QR code
+  if (label.qr) {
+    try { doc.addImage(label.qr, 'PNG', qrX, qrY, qrSize, qrSize) }
+    catch { doc.rect(qrX, qrY, qrSize, qrSize) }
+  } else {
+    doc.setDrawColor(150)
+    doc.rect(qrX, qrY, qrSize, qrSize)
+    doc.setFontSize(4)
+    doc.text('QR CODE', qrX + 3.5, qrY + 8)
+  }
+
+  // Info right of QR
+  const infoX = qrX + qrSize + 2
+  const infoW = W - M - infoX
+  let iy = qrY + 1.5
+
+  // Product code
+  if (label.code) {
+    font(FONT.caption, 'bold')
+    doc.text(`${t.code}: ${label.code}`, infoX, iy)
+    iy += 2
+  }
+
+  // Winery EN
+  if (label.winery) {
+    font(FONT.caption, 'normal')
+    doc.text(label.winery, infoX, iy)
+    iy += 1.8
+  }
+
+  // Winery JP
+  if (label.wineryJp) {
+    font(FONT.caption, 'normal')
+    doc.text(label.wineryJp, infoX, iy)
+    iy += 1.8
+  }
+
+  // EAN
+  if (label.barcode) {
+    font(FONT.caption, 'normal')
+    doc.setTextColor(100)
+    doc.text(`EAN: ${label.barcode}`, infoX, iy)
+    doc.setTextColor(0)
+  }
 
   return doc
 }
@@ -326,23 +397,10 @@ export const downloadLabelPDF = (label, options) => {
 }
 
 /**
- * Download batch — one label per page in a single PDF
+ * Download batch — one label per page
  */
 export const downloadBatchPDF = (labels, options = {}) => {
   if (!labels.length) return
-
-  // Generate first label to get dimensions
-  const first = generateLabelPDF(labels[0], options)
-  const pageSize = first.internal.pageSize
-
-  // For subsequent labels, add pages to the first doc
-  for (let i = 1; i < labels.length; i++) {
-    first.addPage([pageSize.getWidth(), pageSize.getHeight()])
-    const tmpDoc = generateLabelPDF(labels[i], options)
-    // Copy content is complex with jsPDF — simpler approach: download individually
-  }
-
-  // MVP: download individually with small delay
   labels.forEach((label, i) => {
     setTimeout(() => downloadLabelPDF(label, options), i * 200)
   })

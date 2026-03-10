@@ -58,6 +58,9 @@ const FIELDS = {
   allergensDe:    { id: 'fldEOMFWxbQSf2CkK', name: 'Allergens_DE' },
   allergensEs:    { id: 'fldInUdH7hm7dgYlW', name: 'Allergens_ES' },
 
+  // === Sake-specific fields ===
+  seimaibuai:         { id: 'fldCcsaPU02WicBz6', name: 'Seimaibuai' },
+
   // === Packaging & Operator ===
   packagingMaterials: { id: 'fldz7XcoWe5x3yfYw', name: 'Packaging_Materials' },
   operatorName:       { id: 'fldE2830YVz8gJebH', name: 'Operator_Name' },
@@ -293,6 +296,9 @@ function normalizeRecord(record) {
       de: get('allergensDe') || '',
       es: get('allergensEs') || '',
     },
+
+    // Sake-specific
+    seimaibuai: get('seimaibuai') || null,
 
     // Packaging & Operator
     packagingMaterials: get('packagingMaterials') || '',
