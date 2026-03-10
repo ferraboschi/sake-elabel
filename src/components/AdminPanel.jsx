@@ -1067,13 +1067,28 @@ const AdminPanel = () => {
                           <td style={{ textAlign: 'center', fontSize: '16px' }}>{flags.ingredients ? '✅' : '⬜'}</td>
                           <td style={{ textAlign: 'center', fontSize: '16px' }}>{flags.materials ? '✅' : '⬜'}</td>
                           <td style={{ textAlign: 'center' }}>
-                            <button onClick={() => openEditor(product)}
-                              style={{
-                                padding: '4px 10px', fontSize: '12px', border: '1px solid #1976d2',
-                                background: (flags.nutrition && flags.ingredients && flags.materials) ? '#fff' : '#e3f2fd', color: '#1976d2', borderRadius: '4px', cursor: 'pointer'
-                              }}>
-                              {(flags.nutrition && flags.ingredients && flags.materials) ? 'Modifica' : 'Compila'}
-                            </button>
+                            <div style={{ display: 'flex', gap: '6px', justifyContent: 'center', alignItems: 'center' }}>
+                              <button onClick={() => openEditor(product)}
+                                style={{
+                                  padding: '4px 10px', fontSize: '12px', border: '1px solid #1976d2',
+                                  background: (flags.nutrition && flags.ingredients && flags.materials) ? '#fff' : '#e3f2fd', color: '#1976d2', borderRadius: '4px', cursor: 'pointer'
+                                }}>
+                                {(flags.nutrition && flags.ingredients && flags.materials) ? 'Modifica' : 'Compila'}
+                              </button>
+                              <button onClick={() => {
+                                  const next = new Set(selectedSlugs)
+                                  next.delete(product.slug)
+                                  setSelectedSlugs(next)
+                                }}
+                                title="Rimuovi dalla selezione"
+                                style={{
+                                  padding: '2px 6px', fontSize: '14px', border: '1px solid #e0e0e0',
+                                  background: '#fff', color: '#999', borderRadius: '4px', cursor: 'pointer',
+                                  lineHeight: 1
+                                }}>
+                                ✕
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       )
