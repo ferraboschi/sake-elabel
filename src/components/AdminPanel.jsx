@@ -895,15 +895,13 @@ const AdminPanel = () => {
                             </span>
                           </td>
                           <td style={{ textAlign: 'center' }}>
-                            {!ready && (
-                              <button onClick={() => openEditor(product)}
-                                style={{
-                                  padding: '4px 10px', fontSize: '12px', border: '1px solid #1976d2',
-                                  background: '#e3f2fd', color: '#1976d2', borderRadius: '4px', cursor: 'pointer'
-                                }}>
-                                Compila
-                              </button>
-                            )}
+                            <button onClick={() => openEditor(product)}
+                              style={{
+                                padding: '4px 10px', fontSize: '12px', border: '1px solid #1976d2',
+                                background: ready ? '#fff' : '#e3f2fd', color: '#1976d2', borderRadius: '4px', cursor: 'pointer'
+                              }}>
+                              {ready ? 'Modifica' : 'Compila'}
+                            </button>
                           </td>
                         </tr>
                       )
