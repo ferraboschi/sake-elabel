@@ -256,34 +256,6 @@ const ELabel = () => {
     i18n.changeLanguage(lang)
   }, [searchParams, i18n])
 
-  // Loading state
-  if (loading) {
-    return (
-      <div className="container">
-        <div className="error-container">
-          <div className="error-message" style={{ fontSize: '18px' }}>
-            Caricamento...
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  // Not found
-  if (!product) {
-    return (
-      <div className="container">
-        <div className="error-container">
-          <div className="error-code">404</div>
-          <div className="error-message">{t('productNotFound')}</div>
-        </div>
-      </div>
-    )
-  }
-
-  const currentSize = product.sizes[selectedSize]
-  const importer = selectedCountry ? getImporterByCountry(selectedCountry) : null
-
   /**
    * Generate PDF from the rendered e-label using html2canvas + jsPDF
    */
@@ -345,7 +317,9 @@ const ELabel = () => {
       pdf.addImage(imgData, 'PNG', xOffset, yOffset, finalWidth, finalHeight)
 
       // Download
-      const fileName = `${product.name.replace(/[^a-zA-Z0-9]/g, '_')}_${currentSize.code || 'label'}_${selectedLanguage}.pdf`
+      const productName = product ? product.name.replace(/[^a-zA-Z0-9]/g, '_') : 'label'
+      const sizeCode = product?.sizes?.[selectedSize]?.code || 'label'
+      const fileName = `${productName}_${sizeCode}_${selectedLanguage}.pdf`
       pdf.save(fileName)
     } catch (err) {
       console.error('PDF generation failed:', err)
@@ -353,7 +327,35 @@ const ELabel = () => {
     } finally {
       setGeneratingPdf(false)
     }
-  }, [product, currentSize, selectedLanguage, generatingPdf])
+  }, [product, selectedSize, selectedLanguage, generatingPdf])
+
+  // Loading state
+  if (loading) {
+    return (
+      <div className="container">
+        <div className="error-container">
+          <div className="error-message" style={{ fontSize: '18px' }}>
+            Caricamento...
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Not found
+  if (!product) {
+    return (
+      <div className="container">
+        <div className="error-container">
+          <div className="error-code">404</div>
+          <div className="error-message">{t('productNotFound')}</div>
+        </div>
+      </div>
+    )
+  }
+
+  const currentSize = product.sizes[selectedSize]
+  const importer = selectedCountry ? getImporterByCountry(selectedCountry) : null
 
   const handleLanguageChange = (lang) => {
     setSelectedLanguage(lang)
