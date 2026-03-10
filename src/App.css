@@ -399,6 +399,18 @@ strong {
   line-height: 1.5;
 }
 
+/* PDF Download Bar */
+.pdf-download-bar {
+  margin: 24px 0 16px;
+  text-align: center;
+}
+
+.pdf-download-button {
+  padding: 12px 32px;
+  font-size: 15px;
+  letter-spacing: 0.5px;
+}
+
 /* Footer */
 .footer {
   margin-top: 24px;
@@ -1558,7 +1570,8 @@ strong {
   .admin-container,
   .button,
   .button-group,
-  .age-restriction {
+  .age-restriction,
+  .pdf-download-bar {
     display: none;
   }
 

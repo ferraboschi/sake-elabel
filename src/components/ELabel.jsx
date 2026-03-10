@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { products } from '../data/products'
@@ -281,6 +281,79 @@ const ELabel = () => {
 
   const currentSize = product.sizes[selectedSize]
   const importer = selectedCountry ? getImporterByCountry(selectedCountry) : null
+  const labelRef = useRef(null)
+  const [generatingPdf, setGeneratingPdf] = useState(false)
+
+  /**
+   * Generate PDF from the rendered e-label using html2canvas + jsPDF
+   */
+  const handleDownloadPdf = useCallback(async () => {
+    if (!labelRef.current || generatingPdf) return
+
+    setGeneratingPdf(true)
+    try {
+      const html2canvas = (await import('html2canvas')).default
+      const { jsPDF } = await import('jspdf')
+
+      // Hide elements we don't want in the PDF
+      const header = labelRef.current.querySelector('.header')
+      const ageRestriction = labelRef.current.querySelector('.age-restriction')
+      const pdfBtn = labelRef.current.querySelector('.pdf-download-bar')
+      if (header) header.style.display = 'none'
+      if (ageRestriction) ageRestriction.style.display = 'none'
+      if (pdfBtn) pdfBtn.style.display = 'none'
+
+      // Capture the label content
+      const canvas = await html2canvas(labelRef.current, {
+        scale: 2,
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: '#ffffff',
+        logging: false,
+      })
+
+      // Restore hidden elements
+      if (header) header.style.display = ''
+      if (ageRestriction) ageRestriction.style.display = ''
+      if (pdfBtn) pdfBtn.style.display = ''
+
+      // Create PDF (A4 size)
+      const imgData = canvas.toDataURL('image/png')
+      const pdf = new jsPDF('p', 'mm', 'a4')
+      const pdfWidth = pdf.internal.pageSize.getWidth()
+      const pdfHeight = pdf.internal.pageSize.getHeight()
+
+      // Calculate dimensions to fit content on page with margins
+      const margin = 10
+      const maxWidth = pdfWidth - (margin * 2)
+      const maxHeight = pdfHeight - (margin * 2)
+
+      const imgAspect = canvas.width / canvas.height
+      let finalWidth = maxWidth
+      let finalHeight = finalWidth / imgAspect
+
+      // If too tall, scale down to fit height
+      if (finalHeight > maxHeight) {
+        finalHeight = maxHeight
+        finalWidth = finalHeight * imgAspect
+      }
+
+      // Center on page
+      const xOffset = (pdfWidth - finalWidth) / 2
+      const yOffset = margin
+
+      pdf.addImage(imgData, 'PNG', xOffset, yOffset, finalWidth, finalHeight)
+
+      // Download
+      const fileName = `${product.name.replace(/[^a-zA-Z0-9]/g, '_')}_${currentSize.code || 'label'}_${selectedLanguage}.pdf`
+      pdf.save(fileName)
+    } catch (err) {
+      console.error('PDF generation failed:', err)
+      alert('Errore nella generazione del PDF. Riprova.')
+    } finally {
+      setGeneratingPdf(false)
+    }
+  }, [product, currentSize, selectedLanguage, generatingPdf])
 
   const handleLanguageChange = (lang) => {
     setSelectedLanguage(lang)
@@ -310,11 +383,11 @@ const ELabel = () => {
     Object.values(product.ingredients).some(v => v && v.trim())
 
   return (
-    <div className="container">
+    <div className="container" ref={labelRef}>
       {/* Age Restriction Badge */}
       <div className="age-restriction">18+</div>
 
-      {/* Header with Language Selector */}
+      {/* Header with Language Selector + PDF Download */}
       <div className="header">
         <div></div>
         <div className="language-selector">
@@ -481,6 +554,17 @@ const ELabel = () => {
           <div className="importer-address">{importer.address}</div>
         </div>
       )}
+
+      {/* PDF Download Button */}
+      <div className="pdf-download-bar">
+        <button
+          className="button button-primary pdf-download-button"
+          onClick={handleDownloadPdf}
+          disabled={generatingPdf}
+        >
+          {generatingPdf ? 'Generazione PDF...' : 'Scarica PDF'}
+        </button>
+      </div>
 
       {/* Footer */}
       <div className="footer">
