@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import QRCode from 'qrcode'
 import { products as localProducts } from '../data/products'
-import { getImporterByCountry, getAvailableCountries } from '../data/importers'
+import { getImportersForCountry, getAvailableCountries, addCustomImporter } from '../data/importers'
 import { fetchProducts, updateProduct, isAirtableConfigured } from '../services/airtable'
 import { useAuth } from '../contexts/AuthContext'
 import { saveLabels } from '../services/labelStore'
@@ -12,11 +12,11 @@ import { analyzeBottleImage } from '../services/bottleAnalyzer'
 import { useTranslation } from 'react-i18next'
 
 const LANG_OPTIONS = [
-  { code: 'it', label: 'Italiano', flag: '\u{1F1EE}\u{1F1F9}' },
-  { code: 'de', label: 'Deutsch', flag: '\u{1F1E9}\u{1F1EA}' },
-  { code: 'fr', label: 'Fran\u00e7ais', flag: '\u{1F1EB}\u{1F1F7}' },
-  { code: 'es', label: 'Espa\u00f1ol', flag: '\u{1F1EA}\u{1F1F8}' },
-  { code: 'ja', label: '\u65E5\u672C\u8A9E', flag: '\u{1F1EF}\u{1F1F5}' },
+  { code: 'it', label: 'Italiano', flag: '🇮🇹' },
+  { code: 'de', label: 'Deutsch', flag: '🇩🇪' },
+  { code: 'fr', label: 'Français', flag: '🇫🇷' },
+  { code: 'es', label: 'Español', flag: '🇪🇸' },
+  { code: 'ja', label: '日本語', flag: '🇯🇵' },
 ]
 
 const AdminPanel = () => {
@@ -27,6 +27,7 @@ const AdminPanel = () => {
   const [allProducts, setAllProducts] = useState([])
   const [loading, setLoading] = useState(true)
   const [dataSource, setDataSource] = useState('local')
+  const [refreshing, setRefreshing] = useState(false)
 
   // Step 1
   const [selectedSlugs, setSelectedSlugs] = useState(new Set())
@@ -36,6 +37,10 @@ const AdminPanel = () => {
   // Step 2
   const [selectedLanguage, setSelectedLanguage] = useState('it')
   const [selectedCountry, setSelectedCountry] = useState('Italia')
+  const [selectedImporterId, setSelectedImporterId] = useState('default-it')
+  const [showAddImporter, setShowAddImporter] = useState(false)
+  const [newImporterName, setNewImporterName] = useState('')
+  const [newImporterAddress, setNewImporterAddress] = useState('')
 
   // Step 2.5 - Editing
   const [editingProduct, setEditingProduct] = useState(null)
@@ -52,6 +57,17 @@ const AdminPanel = () => {
   useEffect(() => {
     loadProducts()
   }, [])
+
+  // When country changes, auto-select first importer for that country
+  useEffect(() => {
+    const importersForCountry = getImportersForCountry(selectedCountry)
+    if (importersForCountry.length > 0) {
+      setSelectedImporterId(importersForCountry[0].id)
+    } else {
+      setSelectedImporterId('')
+    }
+    setShowAddImporter(false)
+  }, [selectedCountry])
 
   const loadProducts = async () => {
     setLoading(true)
@@ -106,6 +122,12 @@ const AdminPanel = () => {
     setLoading(false)
   }
 
+  const handleRefresh = async () => {
+    setRefreshing(true)
+    await loadProducts()
+    setRefreshing(false)
+  }
+
   // Derived
   const categories = [...new Set(allProducts.map(p => p.category).filter(Boolean))].sort()
 
@@ -124,11 +146,12 @@ const AdminPanel = () => {
 
   const selectedProducts = allProducts.filter(p => selectedSlugs.has(p.slug))
 
-  const importer = getImporterByCountry(selectedCountry)
+  // Get currently selected importer object
+  const importersForCountry = getImportersForCountry(selectedCountry)
+  const importer = importersForCountry.find(i => i.id === selectedImporterId) || importersForCountry[0] || null
   const hasValidImporter = importer && importer.name
 
   // Readiness check — nutrition and ingredients required for e-label
-  // Materials are NOT required for back label PDF (accessible via QR code)
   const getProductReadiness = (product, lang) => {
     const missing = []
     if (!product.nutrition?.energy_kj && product.nutrition?.energy_kj !== 0) missing.push('nutrition')
@@ -152,6 +175,24 @@ const AdminPanel = () => {
     } else {
       setSelectedSlugs(new Set(filteredProducts.map(p => p.slug)))
     }
+  }
+
+  // Add new importer
+  const handleAddImporter = () => {
+    if (!newImporterName.trim()) return
+    const langMap = { Italia: 'it', Deutschland: 'de', France: 'fr', 'España': 'es', Japan: 'ja' }
+    const codeMap = { Italia: 'IT', Deutschland: 'DE', France: 'FR', 'España': 'ES', Japan: 'JP' }
+    const newImp = addCustomImporter({
+      name: newImporterName.trim(),
+      address: newImporterAddress.trim(),
+      country: selectedCountry,
+      lang: langMap[selectedCountry] || 'it',
+      code: codeMap[selectedCountry] || 'IT',
+    })
+    setSelectedImporterId(newImp.id)
+    setShowAddImporter(false)
+    setNewImporterName('')
+    setNewImporterAddress('')
   }
 
   // Inline editing
@@ -340,8 +381,12 @@ const AdminPanel = () => {
           {generatedLabels.map(label => (
             <div key={label.slug} className="preview-card">
               <h3>{label.name}</h3>
-              <p className="preview-subtitle">{label.winery} {label.wineryJp && `\u2014 ${label.wineryJp}`}</p>
-              <p style={{ fontSize: '12px', color: '#888' }}>{label.code} \u2022 {label.volumeMl}ml \u2022 {label.alcoholPct}%</p>
+              <p className="preview-subtitle">
+                {label.winery}{label.wineryJp ? ` — ${label.wineryJp}` : ''}
+              </p>
+              <p style={{ fontSize: '12px', color: '#888' }}>
+                {label.code} · {label.volumeMl}ml · {label.alcoholPct}%
+              </p>
               <img src={label.qr} alt={`QR ${label.name}`} className="qr-preview-large" />
               <div className="preview-url">
                 <code style={{ fontSize: '10px', wordBreak: 'break-all' }}>
@@ -365,7 +410,7 @@ const AdminPanel = () => {
     return (
       <div className="admin-container">
         <div className="admin-header">
-          <button className="button button-secondary" onClick={() => setEditingProduct(null)}>{t('back')}</button>
+          <button className="button button-secondary" onClick={() => setEditingProduct(null)}>{'← '}{t('back')}</button>
           <h1>Completa dati: {editingProduct.name}</h1>
         </div>
 
@@ -465,9 +510,9 @@ const AdminPanel = () => {
               <label>Codice materiale bottiglia</label>
               <select value={editForm.bottleMaterialCode || ''} onChange={e => updateEditField('bottleMaterialCode', e.target.value)}>
                 <option value="">-- Seleziona --</option>
-                <option value="GL 70">GL 70 \u2014 Vetro incolore</option>
-                <option value="GL 71">GL 71 \u2014 Vetro verde</option>
-                <option value="GL 72">GL 72 \u2014 Vetro marrone</option>
+                <option value="GL 70">GL 70 — Vetro incolore</option>
+                <option value="GL 71">GL 71 — Vetro verde</option>
+                <option value="GL 72">GL 72 — Vetro marrone</option>
               </select>
             </div>
             <div className="edit-field">
@@ -484,10 +529,10 @@ const AdminPanel = () => {
               <label>Codice materiale tappo</label>
               <select value={editForm.capMaterialCode || ''} onChange={e => updateEditField('capMaterialCode', e.target.value)}>
                 <option value="">-- Seleziona --</option>
-                <option value="C/ALU 90">C/ALU 90 \u2014 Alluminio</option>
-                <option value="FOR 51">FOR 51 \u2014 Sughero</option>
-                <option value="PVC 03">PVC 03 \u2014 Plastica PVC</option>
-                <option value="FE 40">FE 40 \u2014 Acciaio</option>
+                <option value="C/ALU 90">C/ALU 90 — Alluminio</option>
+                <option value="FOR 51">FOR 51 — Sughero</option>
+                <option value="PVC 03">PVC 03 — Plastica PVC</option>
+                <option value="FE 40">FE 40 — Acciaio</option>
               </select>
             </div>
           </div>
@@ -516,14 +561,25 @@ const AdminPanel = () => {
           <button className="button button-secondary button-small" onClick={logout}>Esci</button>
         </div>
       </div>
+
       <div style={{ marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div className="data-source-badge" style={{
-          padding: '4px 12px', borderRadius: '12px', fontSize: '12px', fontWeight: 600,
-          background: dataSource === 'airtable' ? '#e8f5e9' : '#fff3e0',
-          color: dataSource === 'airtable' ? '#2e7d32' : '#e65100'
-        }}>
-          {dataSource === 'airtable' ? '\u2601\uFE0F Airtable' : '\u{1F4C1} Dati locali'}
-          {dataSource === 'airtable' && ` \u2022 ${allProducts.length} prodotti`}
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+          <div className="data-source-badge" style={{
+            padding: '4px 12px', borderRadius: '12px', fontSize: '12px', fontWeight: 600,
+            background: dataSource === 'airtable' ? '#e8f5e9' : '#fff3e0',
+            color: dataSource === 'airtable' ? '#2e7d32' : '#e65100'
+          }}>
+            {dataSource === 'airtable' ? '☁️ Airtable' : '📁 Dati locali'}
+            {dataSource === 'airtable' && ` · ${allProducts.length} prodotti`}
+          </div>
+          <button
+            className="button button-secondary button-small"
+            onClick={handleRefresh}
+            disabled={refreshing}
+            style={{ fontSize: '12px', padding: '4px 10px' }}
+          >
+            {refreshing ? '⏳ Aggiornamento...' : '🔄 Aggiorna da Airtable'}
+          </button>
         </div>
       </div>
 
@@ -554,35 +610,40 @@ const AdminPanel = () => {
                   />
                 </div>
                 <select value={filterCategory} onChange={e => setFilterCategory(e.target.value)}
-                  style={{ padding: '8px 12px', border: '1px solid #ddd', borderRadius: '6px', fontSize: '14px' }}>
+                  style={{ padding: '8px 12px', border: '1px solid #ddd', borderRadius: '6px', fontSize: '14px', minWidth: '160px' }}>
                   <option value="">Tutte le categorie</option>
                   {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
                 </select>
               </div>
 
-              <div className="product-controls" style={{ marginBottom: '12px' }}>
+              <div className="product-controls" style={{ marginBottom: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <button className="button button-secondary" onClick={toggleSelectAll} style={{ fontSize: '13px' }}>
                   {selectedSlugs.size === filteredProducts.length ? 'Deseleziona tutti' : `Seleziona tutti (${filteredProducts.length})`}
                 </button>
+                <span style={{ fontSize: '13px', color: '#888' }}>
+                  {filteredProducts.length} prodotti{filterCategory ? ` in "${filterCategory}"` : ''}{searchQuery ? ` per "${searchQuery}"` : ''}
+                </span>
               </div>
 
               <div className="products-list" style={{ maxHeight: '500px', overflowY: 'auto', border: '1px solid #eee', borderRadius: '8px' }}>
                 {filteredProducts.map(product => (
                   <div key={product.slug} className="product-list-item" style={{
                     display: 'flex', alignItems: 'center', padding: '10px 14px',
-                    borderBottom: '1px solid #f0f0f0', gap: '12px'
-                  }}>
+                    borderBottom: '1px solid #f0f0f0', gap: '12px',
+                    cursor: 'pointer', background: selectedSlugs.has(product.slug) ? '#f0f7ff' : 'transparent'
+                  }} onClick={() => toggleProduct(product.slug)}>
                     <input
                       type="checkbox"
                       checked={selectedSlugs.has(product.slug)}
                       onChange={() => toggleProduct(product.slug)}
+                      onClick={e => e.stopPropagation()}
                       style={{ width: '18px', height: '18px', cursor: 'pointer' }}
                     />
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontWeight: 500, fontSize: '14px' }}>{product.name}</div>
                       <div style={{ fontSize: '12px', color: '#888' }}>
-                        {product.code} \u2022 {product.winery} \u2022 {product.volumeMl}ml
-                        {product.alcoholPct && ` \u2022 ${product.alcoholPct}%`}
+                        {product.code} · {product.winery} · {product.volumeMl}ml
+                        {product.alcoholPct ? ` · ${product.alcoholPct}%` : ''}
                       </div>
                     </div>
                     <span style={{ fontSize: '12px', color: '#aaa', whiteSpace: 'nowrap' }}>{product.category}</span>
@@ -600,7 +661,7 @@ const AdminPanel = () => {
                   {selectedSlugs.size > 0 ? `${selectedSlugs.size} prodotti selezionati` : 'Seleziona almeno un prodotto'}
                 </span>
                 <button className="button button-primary" onClick={() => setCurrentStep(2)} disabled={selectedSlugs.size === 0}>
-                  Continua \u2192
+                  Continua →
                 </button>
               </div>
             </div>
@@ -611,12 +672,12 @@ const AdminPanel = () => {
         <div className={`step-section ${currentStep === 2 ? 'active' : ''}`}>
           <div className="step-header" onClick={() => currentStep > 2 && setCurrentStep(2)} style={{ cursor: currentStep > 2 ? 'pointer' : 'default' }}>
             <div className="step-number">2</div>
-            <h2 className="step-title">Lingua, Paese e Verifica Dati</h2>
+            <h2 className="step-title">Lingua, Importatore e Verifica Dati</h2>
           </div>
 
           {currentStep === 2 && (
             <div className="step-content">
-              <div style={{ display: 'flex', gap: '20px', marginBottom: '24px', flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', gap: '20px', marginBottom: '20px', flexWrap: 'wrap' }}>
                 <div style={{ flex: 1, minWidth: '200px' }}>
                   <label style={{ display: 'block', fontWeight: 600, marginBottom: '6px' }}>Lingua etichetta</label>
                   <select value={selectedLanguage} onChange={e => setSelectedLanguage(e.target.value)}
@@ -627,7 +688,7 @@ const AdminPanel = () => {
                   </select>
                 </div>
                 <div style={{ flex: 1, minWidth: '200px' }}>
-                  <label style={{ display: 'block', fontWeight: 600, marginBottom: '6px' }}>Paese / Importatore</label>
+                  <label style={{ display: 'block', fontWeight: 600, marginBottom: '6px' }}>Paese destinazione</label>
                   <select value={selectedCountry} onChange={e => setSelectedCountry(e.target.value)}
                     style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px', fontSize: '15px' }}>
                     {getAvailableCountries().map(c => <option key={c} value={c}>{c}</option>)}
@@ -635,22 +696,98 @@ const AdminPanel = () => {
                 </div>
               </div>
 
-              {/* Importer card */}
-              {importer && (
-                <div style={{
-                  padding: '14px 18px', borderRadius: '8px', marginBottom: '24px',
-                  background: hasValidImporter ? '#e8f5e9' : '#ffebee',
-                  border: `1px solid ${hasValidImporter ? '#c8e6c9' : '#ffcdd2'}`
-                }}>
-                  <div style={{ fontWeight: 600, marginBottom: '4px' }}>
-                    {hasValidImporter ? `\u2705 ${importer.name}` : '\u26A0\uFE0F Importatore non definito'}
+              {/* Importer selection */}
+              <div style={{ marginBottom: '24px' }}>
+                <label style={{ display: 'block', fontWeight: 600, marginBottom: '6px' }}>Importatore</label>
+                {importersForCountry.length > 0 ? (
+                  <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', flexWrap: 'wrap' }}>
+                    <select
+                      value={selectedImporterId}
+                      onChange={e => {
+                        if (e.target.value === '__add_new__') {
+                          setShowAddImporter(true)
+                        } else {
+                          setSelectedImporterId(e.target.value)
+                          setShowAddImporter(false)
+                        }
+                      }}
+                      style={{ flex: 1, minWidth: '250px', padding: '10px', border: '1px solid #ddd', borderRadius: '6px', fontSize: '14px' }}
+                    >
+                      {importersForCountry.map(imp => (
+                        <option key={imp.id} value={imp.id}>
+                          {imp.name}{imp.address ? ` — ${imp.address}` : ''}
+                        </option>
+                      ))}
+                      <option value="__add_new__">+ Aggiungi nuovo importatore...</option>
+                    </select>
                   </div>
-                  {hasValidImporter && <div style={{ fontSize: '13px', color: '#555' }}>{importer.address}</div>}
-                  {!hasValidImporter && <div style={{ fontSize: '13px', color: '#c62828' }}>
-                    Definisci l'importatore per questo paese nella tabella Importers su Airtable
-                  </div>}
-                </div>
-              )}
+                ) : (
+                  <div style={{
+                    padding: '14px 18px', borderRadius: '8px', marginBottom: '8px',
+                    background: '#fff3e0', border: '1px solid #ffe0b2'
+                  }}>
+                    <div style={{ fontWeight: 600, color: '#e65100', marginBottom: '4px' }}>
+                      ⚠️ Nessun importatore per {selectedCountry}
+                    </div>
+                    <button className="button button-small" onClick={() => setShowAddImporter(true)}
+                      style={{ marginTop: '6px', fontSize: '13px' }}>
+                      + Aggiungi importatore
+                    </button>
+                  </div>
+                )}
+
+                {/* Importer details card */}
+                {hasValidImporter && !showAddImporter && (
+                  <div style={{
+                    padding: '10px 14px', borderRadius: '6px', marginTop: '8px',
+                    background: '#e8f5e9', border: '1px solid #c8e6c9', fontSize: '13px'
+                  }}>
+                    <strong>✅ {importer.name}</strong>
+                    {importer.address && <span style={{ color: '#555' }}> — {importer.address}</span>}
+                  </div>
+                )}
+
+                {/* Add new importer form */}
+                {showAddImporter && (
+                  <div style={{
+                    padding: '16px', borderRadius: '8px', marginTop: '10px',
+                    background: '#f5f5f5', border: '1px solid #e0e0e0'
+                  }}>
+                    <h4 style={{ margin: '0 0 12px', fontSize: '14px' }}>Nuovo importatore per {selectedCountry}</h4>
+                    <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginBottom: '12px' }}>
+                      <div style={{ flex: 1, minWidth: '200px' }}>
+                        <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, marginBottom: '4px' }}>Nome azienda *</label>
+                        <input
+                          type="text"
+                          value={newImporterName}
+                          onChange={e => setNewImporterName(e.target.value)}
+                          placeholder="Es: Sake Company srl"
+                          style={{ width: '100%', padding: '8px 10px', border: '1px solid #ddd', borderRadius: '6px', fontSize: '14px' }}
+                        />
+                      </div>
+                      <div style={{ flex: 1, minWidth: '200px' }}>
+                        <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, marginBottom: '4px' }}>Indirizzo</label>
+                        <input
+                          type="text"
+                          value={newImporterAddress}
+                          onChange={e => setNewImporterAddress(e.target.value)}
+                          placeholder="Es: Via Bianca di Savoia 17, Milano"
+                          style={{ width: '100%', padding: '8px 10px', border: '1px solid #ddd', borderRadius: '6px', fontSize: '14px' }}
+                        />
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <button className="button button-primary button-small" onClick={handleAddImporter}
+                        disabled={!newImporterName.trim()}>
+                        Salva importatore
+                      </button>
+                      <button className="button button-secondary button-small" onClick={() => setShowAddImporter(false)}>
+                        Annulla
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
 
               {/* Product readiness table */}
               <h3 style={{ marginBottom: '12px' }}>Verifica completezza dati</h3>
@@ -676,8 +813,8 @@ const AdminPanel = () => {
                             <div style={{ fontWeight: 500 }}>{product.name}</div>
                             <div style={{ fontSize: '11px', color: '#999' }}>{product.code}</div>
                           </td>
-                          <td style={{ textAlign: 'center' }}>{hasNutrition ? '\u2705' : '\u274C'}</td>
-                          <td style={{ textAlign: 'center' }}>{hasIngredients ? '\u2705' : '\u274C'}</td>
+                          <td style={{ textAlign: 'center' }}>{hasNutrition ? '✅' : '❌'}</td>
+                          <td style={{ textAlign: 'center' }}>{hasIngredients ? '✅' : '❌'}</td>
                           <td style={{ textAlign: 'center' }}>
                             <span style={{
                               display: 'inline-block', padding: '2px 8px', borderRadius: '10px', fontSize: '11px', fontWeight: 600,
@@ -705,10 +842,10 @@ const AdminPanel = () => {
               </div>
 
               <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'space-between' }}>
-                <button className="button button-secondary" onClick={() => setCurrentStep(1)}>\u2190 Indietro</button>
+                <button className="button button-secondary" onClick={() => setCurrentStep(1)}>← Indietro</button>
                 <button className="button button-primary" onClick={() => setCurrentStep(3)}
                   disabled={!hasValidImporter}>
-                  Continua \u2192
+                  Continua →
                 </button>
               </div>
             </div>
@@ -742,7 +879,7 @@ const AdminPanel = () => {
                   borderRadius: '8px', marginBottom: '20px'
                 }}>
                   <div style={{ fontWeight: 600, marginBottom: '8px', color: '#e65100' }}>
-                    \u26A0\uFE0F Alcuni prodotti hanno dati mancanti
+                    ⚠️ Alcuni prodotti hanno dati mancanti
                   </div>
                   <ul style={{ margin: 0, paddingLeft: '20px', fontSize: '13px' }}>
                     {selectedProducts
@@ -759,7 +896,7 @@ const AdminPanel = () => {
               )}
 
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <button className="button button-secondary" onClick={() => setCurrentStep(2)}>\u2190 Indietro</button>
+                <button className="button button-secondary" onClick={() => setCurrentStep(2)}>← Indietro</button>
                 <button className="button button-primary" onClick={handleGenerate}
                   disabled={!allSelectedReady || !hasValidImporter || generating}
                   style={{ minWidth: '200px' }}>
