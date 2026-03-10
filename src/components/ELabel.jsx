@@ -356,19 +356,23 @@ const ELabel = () => {
         </div>
       </div>
 
-      {/* Product Header */}
-      <div className="product-header">
-        <div className="product-name">{product.name}</div>
-        {product.nameJp && selectedLanguage === 'ja' && (
-          <div className="product-winery-jp">{product.nameJp}</div>
-        )}
-        {product.wineryJp && selectedLanguage === 'ja' && (
-          <div className="product-winery-jp">{product.wineryJp}</div>
-        )}
-        <div className="product-winery">{product.winery}</div>
+      {/* Product Header - side-by-side with photo */}
+      <div className={`product-header ${product.photo ? 'product-header-with-photo' : ''}`}>
         {product.photo && (
-          <img src={product.photo} alt={product.name} className="product-photo" />
+          <div className="product-photo-container">
+            <img src={product.photo} alt={product.name} className="product-photo" />
+          </div>
         )}
+        <div className="product-header-text">
+          <div className="product-name">{product.name}</div>
+          {product.nameJp && selectedLanguage === 'ja' && (
+            <div className="product-winery-jp">{product.nameJp}</div>
+          )}
+          {product.wineryJp && selectedLanguage === 'ja' && (
+            <div className="product-winery-jp">{product.wineryJp}</div>
+          )}
+          <div className="product-winery">{product.winery}</div>
+        </div>
       </div>
 
       {/* Product Info Grid */}
