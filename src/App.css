@@ -658,11 +658,11 @@ strong {
 }
 
 .product-filter select {
-  width: 100%;
   padding: 10px;
   border: 1px solid #ddd;
   border-radius: 4px;
   font-size: 14px;
+  flex-shrink: 0;
 }
 
 .product-controls {
