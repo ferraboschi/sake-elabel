@@ -49,6 +49,35 @@
 
 import { jsPDF } from 'jspdf'
 
+// ---- CJK Font Loader (Noto Sans JP) ----
+let cachedFontBase64 = null
+
+async function loadJapaneseFont() {
+  if (cachedFontBase64) return cachedFontBase64
+  try {
+    const basePath = import.meta.env.BASE_URL || '/'
+    const res = await fetch(`${basePath}fonts/NotoSansJP-Regular.ttf`)
+    if (!res.ok) throw new Error(`Font fetch failed: ${res.status}`)
+    const buf = await res.arrayBuffer()
+    const bytes = new Uint8Array(buf)
+    let binary = ''
+    for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i])
+    cachedFontBase64 = btoa(binary)
+    console.log('[LabelPrinter] Noto Sans JP loaded')
+    return cachedFontBase64
+  } catch (err) {
+    console.warn('[LabelPrinter] CJK font unavailable, JP text may not render:', err.message)
+    return null
+  }
+}
+
+function registerJpFont(doc, fontBase64) {
+  if (!fontBase64) return false
+  doc.addFileToVFS('NotoSansJP-Regular.ttf', fontBase64)
+  doc.addFont('NotoSansJP-Regular.ttf', 'NotoSansJP', 'normal')
+  return true
+}
+
 // Font sizes (pt) — EU compliant minimums
 const FONT = {
   title: 7.5,       // Product name EN — prominent
@@ -127,7 +156,9 @@ const TRANSLATIONS = {
  * @param {Object} label - Product + QR + importer data
  * @param {Object} options - Override defaults
  */
-export const generateLabelPDF = (label, options = {}) => {
+export const generateLabelPDF = async (label, options = {}) => {
+  // Preload CJK font for Japanese text
+  const jpFont = await loadJapaneseFont()
   const W = options.widthMm || 55
   const M = 2.5
   const CW = W - M * 2
@@ -206,11 +237,18 @@ export const generateLabelPDF = (label, options = {}) => {
 
   // --- Phase 2: render ---
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: [W, H] })
+  const hasJpFont = registerJpFont(doc, jpFont)
   let y = M
 
   const font = (size, style = 'normal') => {
     doc.setFontSize(size)
     doc.setFont('helvetica', style)
+  }
+
+  const fontJp = (size) => {
+    doc.setFontSize(size)
+    if (hasJpFont) doc.setFont('NotoSansJP', 'normal')
+    else doc.setFont('helvetica', 'normal')
   }
 
   const line = () => {
@@ -229,18 +267,26 @@ export const generateLabelPDF = (label, options = {}) => {
 
   // Name JP
   if (label.nameJp) {
-    font(FONT.titleJp, 'normal')
+    fontJp(FONT.titleJp)
     doc.text(label.nameJp, M, y + 2)
     y += 3
   }
 
   // Type + Seimaibuai on same line
   if (label.category) {
-    font(FONT.subtitle, 'italic')
     doc.setTextColor(80)
-    let typeLine = label.category
-    if (label.seimaibuai) typeLine += `  ·  精米歩合 ${label.seimaibuai}%`
-    doc.text(typeLine, M, y + 1.8)
+    if (label.seimaibuai) {
+      // Render type in Helvetica, then seimaibuai with JP font for 精米歩合
+      font(FONT.subtitle, 'italic')
+      const typeText = label.category + '  ·  '
+      doc.text(typeText, M, y + 1.8)
+      const typeW = doc.getTextWidth(typeText)
+      fontJp(FONT.subtitle)
+      doc.text(`精米歩合 ${label.seimaibuai}%`, M + typeW, y + 1.8)
+    } else {
+      font(FONT.subtitle, 'italic')
+      doc.text(label.category, M, y + 1.8)
+    }
     y += 2.5
     doc.setTextColor(0)
   }
@@ -372,7 +418,7 @@ export const generateLabelPDF = (label, options = {}) => {
 
   // Winery JP
   if (label.wineryJp) {
-    font(FONT.caption, 'normal')
+    fontJp(FONT.caption)
     doc.text(label.wineryJp, infoX, iy)
     iy += 1.8
   }
@@ -391,19 +437,20 @@ export const generateLabelPDF = (label, options = {}) => {
 /**
  * Download single label PDF
  */
-export const downloadLabelPDF = (label, options) => {
-  const doc = generateLabelPDF(label, options)
+export const downloadLabelPDF = async (label, options) => {
+  const doc = await generateLabelPDF(label, options)
   doc.save(`etichetta-${label.code || label.slug}-${label.language}.pdf`)
 }
 
 /**
  * Download batch — one label per page
  */
-export const downloadBatchPDF = (labels, options = {}) => {
+export const downloadBatchPDF = async (labels, options = {}) => {
   if (!labels.length) return
-  labels.forEach((label, i) => {
-    setTimeout(() => downloadLabelPDF(label, options), i * 200)
-  })
+  // Preload font once, then generate all sequentially
+  for (const label of labels) {
+    await downloadLabelPDF(label, options)
+  }
 }
 
 export default { generateLabelPDF, downloadLabelPDF, downloadBatchPDF }
