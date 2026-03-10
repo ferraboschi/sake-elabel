@@ -312,19 +312,13 @@ const ELabel = () => {
       {/* Product Info Grid */}
       <div className="product-info">
         <div className="info-item">
-          <div className="info-label">{t('category')}</div>
+          <div className="info-label">{t('grapeVariety')}</div>
           <div className="info-value">{product.category}</div>
         </div>
         <div className="info-item">
           <div className="info-label">{t('alcohol')}</div>
           <div className="info-value">{product.alcoholPct}%</div>
         </div>
-        {product.grapeVariety && (
-          <div className="info-item">
-            <div className="info-label">{t('grapeVariety')}</div>
-            <div className="info-value">{product.grapeVariety}</div>
-          </div>
-        )}
         <div className="info-item">
           <div className="info-label">{t('countryOfOrigin')}</div>
           <div className="info-value">{product.countryOfOrigin}</div>
