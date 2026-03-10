@@ -46,6 +46,8 @@ const AdminPanel = () => {
   const [editingProduct, setEditingProduct] = useState(null)
   const [editForm, setEditForm] = useState({})
   const [saving, setSaving] = useState(false)
+  const [savingMaterials, setSavingMaterials] = useState(false)
+  const [materialsSaved, setMaterialsSaved] = useState(false)
 
   // Step 3
   const [qrCodes, setQrCodes] = useState({})
@@ -283,6 +285,52 @@ const AdminPanel = () => {
 
     setSaving(false)
     setEditingProduct(null)
+  }
+
+  const saveMaterialsOnly = async () => {
+    if (!editingProduct) return
+    setSavingMaterials(true)
+    setMaterialsSaved(false)
+
+    // Update local state (materials only)
+    const updatedProducts = allProducts.map(p => {
+      if (p.slug !== editingProduct.slug) return p
+      return {
+        ...p,
+        bottleMaterialCode: editForm.bottleMaterialCode,
+        capMaterialCode: editForm.capMaterialCode,
+        bottleColor: editForm.bottleColor,
+        capType: editForm.capType,
+      }
+    })
+    setAllProducts(updatedProducts)
+
+    // Update editingProduct too
+    setEditingProduct(prev => ({
+      ...prev,
+      bottleMaterialCode: editForm.bottleMaterialCode,
+      capMaterialCode: editForm.capMaterialCode,
+      bottleColor: editForm.bottleColor,
+      capType: editForm.capType,
+    }))
+
+    // Save to Airtable if connected
+    if (isAirtableConfigured() && editingProduct._recordId) {
+      try {
+        await updateProduct(editingProduct._recordId, {
+          bottleMaterialCode: editForm.bottleMaterialCode,
+          capMaterialCode: editForm.capMaterialCode,
+          bottleColor: editForm.bottleColor,
+          capType: editForm.capType,
+        })
+      } catch (err) {
+        console.error('Airtable save materials error:', err)
+      }
+    }
+
+    setSavingMaterials(false)
+    setMaterialsSaved(true)
+    setTimeout(() => setMaterialsSaved(false), 3000)
   }
 
   // QR generation
@@ -535,6 +583,26 @@ const AdminPanel = () => {
                 <option value="FE 40">FE 40 — Acciaio</option>
               </select>
             </div>
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '10px', marginTop: '10px', marginBottom: '8px' }}>
+            {materialsSaved && (
+              <span style={{ fontSize: '13px', color: '#2e7d32', fontWeight: 600 }}>
+                Materiali salvati
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={saveMaterialsOnly}
+              disabled={savingMaterials}
+              style={{
+                padding: '6px 16px', fontSize: '13px', fontWeight: 600,
+                background: savingMaterials ? '#ccc' : '#1565c0', color: '#fff',
+                border: 'none', borderRadius: '6px', cursor: savingMaterials ? 'default' : 'pointer',
+              }}
+            >
+              {savingMaterials ? 'Salvataggio...' : 'Conferma materiali'}
+            </button>
           </div>
 
           <div className="edit-actions">
