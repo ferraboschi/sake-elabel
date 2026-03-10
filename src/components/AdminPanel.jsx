@@ -48,6 +48,13 @@ const AdminPanel = () => {
   const [saving, setSaving] = useState(false)
   const [savingMaterials, setSavingMaterials] = useState(false)
   const [materialsSaved, setMaterialsSaved] = useState(false)
+  const [savingNutrition, setSavingNutrition] = useState(false)
+  const [nutritionSaved, setNutritionSaved] = useState(false)
+  const [savingIngredients, setSavingIngredients] = useState(false)
+  const [ingredientsSaved, setIngredientsSaved] = useState(false)
+
+  // Track confirmations per product slug: { slug: { nutrition: true, ingredients: true, materials: true } }
+  const [confirmedFlags, setConfirmedFlags] = useState({})
 
   // Step 3
   const [qrCodes, setQrCodes] = useState({})
@@ -134,6 +141,8 @@ const AdminPanel = () => {
   const categories = [...new Set(allProducts.map(p => p.category).filter(Boolean))].sort()
 
   const filteredProducts = allProducts.filter(p => {
+    // Hide empty/incomplete products (no name = not a real product)
+    if (!p.name || !p.name.trim()) return false
     if (p.status === 'CANCELED') return false
     if (filterCategory && p.category !== filterCategory) return false
     if (searchQuery) {
@@ -162,7 +171,10 @@ const AdminPanel = () => {
   }
 
   const allSelectedReady = selectedProducts.length > 0
-    && selectedProducts.every(p => getProductReadiness(p, selectedLanguage).ready)
+    && selectedProducts.every(p => {
+      const flags = confirmedFlags[p.slug] || {}
+      return flags.nutrition && flags.ingredients && flags.materials
+    })
 
   // Selection handlers
   const toggleProduct = (slug) => {
@@ -198,9 +210,31 @@ const AdminPanel = () => {
   }
 
   // Inline editing
+  // Pre-set ingredients based on sake category
+  const getDefaultIngredients = (category, lang) => {
+    const junmaiTypes = ['Junmai', 'Junmai Ginjo', 'Junmai Daiginjo', 'Tokubetsu Junmai']
+    const isJunmai = junmaiTypes.some(t => (category || '').toLowerCase().includes(t.toLowerCase()))
+    const ingredientsByLang = {
+      it: isJunmai ? 'Riso, riso maltato (koji), acqua' : 'Riso, riso maltato (koji), alcol, acqua',
+      de: isJunmai ? 'Reis, Malzreis (Koji), Wasser' : 'Reis, Malzreis (Koji), Alkohol, Wasser',
+      fr: isJunmai ? 'Riz, riz malté (koji), eau' : 'Riz, riz malté (koji), alcool, eau',
+      es: isJunmai ? 'Arroz, arroz malteado (koji), agua' : 'Arroz, arroz malteado (koji), alcohol, agua',
+      ja: isJunmai ? '米、米麹、水' : '米、米麹、醸造アルコール、水',
+    }
+    return ingredientsByLang[lang] || ingredientsByLang['it']
+  }
+
   const openEditor = (product) => {
     setEditingProduct(product)
-    setEditForm({
+    setNutritionSaved(false)
+    setIngredientsSaved(false)
+    setMaterialsSaved(false)
+
+    // Pre-fill ingredients if empty
+    const currentIngredients = product.ingredients?.[selectedLanguage] || ''
+    const presetIngredients = currentIngredients || getDefaultIngredients(product.category, selectedLanguage)
+
+    const initialForm = {
       energyKj: product.nutrition?.energy_kj ?? '',
       energyKcal: product.nutrition?.energy_kcal ?? '',
       fatG: product.nutrition?.fat ?? '',
@@ -209,13 +243,27 @@ const AdminPanel = () => {
       sugarsG: product.nutrition?.sugars ?? '',
       proteinG: product.nutrition?.protein ?? '',
       saltG: product.nutrition?.salt ?? '',
-      [`ingredients_${selectedLanguage}`]: product.ingredients?.[selectedLanguage] || '',
+      [`ingredients_${selectedLanguage}`]: presetIngredients,
       [`allergens_${selectedLanguage}`]: product.allergens?.[selectedLanguage] || '',
       bottleMaterialCode: product.bottleMaterialCode || 'GL 72',
       capMaterialCode: product.capMaterialCode || 'C/ALU 90',
       bottleColor: product.bottleColor || 'Trasparente',
       capType: product.capType || 'Alluminio',
-    })
+    }
+    setEditForm(initialForm)
+
+    // Auto-detect bottle color from photo
+    if (product.photo && !product.bottleColor) {
+      analyzeBottleImage(product.photo).then(result => {
+        if (result.bottleColor && result.confidence > 40) {
+          setEditForm(prev => ({
+            ...prev,
+            bottleColor: result.bottleColor,
+            bottleMaterialCode: result.materialCode,
+          }))
+        }
+      }).catch(() => {})
+    }
   }
 
   const updateEditField = (field, value) => {
@@ -330,7 +378,96 @@ const AdminPanel = () => {
 
     setSavingMaterials(false)
     setMaterialsSaved(true)
+    setConfirmedFlags(prev => ({ ...prev, [editingProduct.slug]: { ...prev[editingProduct.slug], materials: true } }))
     setTimeout(() => setMaterialsSaved(false), 3000)
+  }
+
+  const saveNutritionOnly = async () => {
+    if (!editingProduct) return
+    setSavingNutrition(true)
+    setNutritionSaved(false)
+
+    const nutritionData = {
+      energy_kj: parseFloat(editForm.energyKj) || 0,
+      energy_kcal: parseFloat(editForm.energyKcal) || 0,
+      fat: parseFloat(editForm.fatG) || 0,
+      saturated_fat: parseFloat(editForm.saturatedFatG) || 0,
+      carbs: parseFloat(editForm.carbsG) || 0,
+      sugars: parseFloat(editForm.sugarsG) || 0,
+      protein: parseFloat(editForm.proteinG) || 0,
+      salt: parseFloat(editForm.saltG) || 0,
+    }
+
+    const updatedProducts = allProducts.map(p => {
+      if (p.slug !== editingProduct.slug) return p
+      return { ...p, nutrition: nutritionData }
+    })
+    setAllProducts(updatedProducts)
+    setEditingProduct(prev => ({ ...prev, nutrition: nutritionData }))
+
+    if (isAirtableConfigured() && editingProduct._recordId) {
+      try {
+        await updateProduct(editingProduct._recordId, {
+          energyKj: nutritionData.energy_kj,
+          energyKcal: nutritionData.energy_kcal,
+          fatG: nutritionData.fat,
+          saturatedFatG: nutritionData.saturated_fat,
+          carbsG: nutritionData.carbs,
+          sugarsG: nutritionData.sugars,
+          proteinG: nutritionData.protein,
+          saltG: nutritionData.salt,
+        })
+      } catch (err) {
+        console.error('Airtable save nutrition error:', err)
+      }
+    }
+
+    setSavingNutrition(false)
+    setNutritionSaved(true)
+    setConfirmedFlags(prev => ({ ...prev, [editingProduct.slug]: { ...prev[editingProduct.slug], nutrition: true } }))
+    setTimeout(() => setNutritionSaved(false), 3000)
+  }
+
+  const saveIngredientsOnly = async () => {
+    if (!editingProduct) return
+    setSavingIngredients(true)
+    setIngredientsSaved(false)
+
+    const ingredientsValue = editForm[`ingredients_${selectedLanguage}`] || ''
+    const allergensValue = editForm[`allergens_${selectedLanguage}`] || ''
+
+    const updatedProducts = allProducts.map(p => {
+      if (p.slug !== editingProduct.slug) return p
+      return {
+        ...p,
+        ingredients: { ...p.ingredients, [selectedLanguage]: ingredientsValue },
+        allergens: { ...p.allergens, [selectedLanguage]: allergensValue },
+      }
+    })
+    setAllProducts(updatedProducts)
+    setEditingProduct(prev => ({
+      ...prev,
+      ingredients: { ...prev.ingredients, [selectedLanguage]: ingredientsValue },
+      allergens: { ...prev.allergens, [selectedLanguage]: allergensValue },
+    }))
+
+    if (isAirtableConfigured() && editingProduct._recordId) {
+      try {
+        const langMap = { it: 'It', de: 'De', fr: 'Fr', es: 'Es', ja: 'Jp' }
+        const langSuffix = langMap[selectedLanguage] || 'It'
+        await updateProduct(editingProduct._recordId, {
+          [`ingredients${langSuffix}`]: ingredientsValue,
+          [`allergens${langSuffix}`]: allergensValue,
+        })
+      } catch (err) {
+        console.error('Airtable save ingredients error:', err)
+      }
+    }
+
+    setSavingIngredients(false)
+    setIngredientsSaved(true)
+    setConfirmedFlags(prev => ({ ...prev, [editingProduct.slug]: { ...prev[editingProduct.slug], ingredients: true } }))
+    setTimeout(() => setIngredientsSaved(false), 3000)
   }
 
   // QR generation
@@ -421,7 +558,7 @@ const AdminPanel = () => {
             {t('downloadAllQRCodes')} ({generatedLabels.length})
           </button>
           <button className="button button-secondary" onClick={() => navigate('/archive')}>
-            Vai all'Archivio
+            Vai alle Etichette
           </button>
         </div>
 
@@ -492,6 +629,26 @@ const AdminPanel = () => {
             ))}
           </div>
 
+          <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '10px', marginTop: '10px', marginBottom: '8px' }}>
+            {nutritionSaved && (
+              <span style={{ fontSize: '13px', color: '#2e7d32', fontWeight: 600 }}>
+                Valori nutrizionali salvati
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={saveNutritionOnly}
+              disabled={savingNutrition}
+              style={{
+                padding: '6px 16px', fontSize: '13px', fontWeight: 600,
+                background: savingNutrition ? '#ccc' : '#1565c0', color: '#fff',
+                border: 'none', borderRadius: '6px', cursor: savingNutrition ? 'default' : 'pointer',
+              }}
+            >
+              {savingNutrition ? 'Salvataggio...' : 'Conferma valori nutrizionali'}
+            </button>
+          </div>
+
           <h3 className="edit-section-title">Ingredienti ({langLabel})</h3>
           <textarea
             className="edit-textarea"
@@ -509,6 +666,26 @@ const AdminPanel = () => {
             onChange={e => updateEditField(`allergens_${selectedLanguage}`, e.target.value)}
             placeholder="Es: solfiti (lasciare vuoto se nessuno)"
           />
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '10px', marginTop: '10px', marginBottom: '8px' }}>
+            {ingredientsSaved && (
+              <span style={{ fontSize: '13px', color: '#2e7d32', fontWeight: 600 }}>
+                Ingredienti salvati
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={saveIngredientsOnly}
+              disabled={savingIngredients}
+              style={{
+                padding: '6px 16px', fontSize: '13px', fontWeight: 600,
+                background: savingIngredients ? '#ccc' : '#1565c0', color: '#fff',
+                border: 'none', borderRadius: '6px', cursor: savingIngredients ? 'default' : 'pointer',
+              }}
+            >
+              {savingIngredients ? 'Salvataggio...' : 'Conferma ingredienti'}
+            </button>
+          </div>
 
           <h3 className="edit-section-title">
             Materiali bottiglia
@@ -606,10 +783,7 @@ const AdminPanel = () => {
           </div>
 
           <div className="edit-actions">
-            <button className="button button-secondary" onClick={() => setEditingProduct(null)}>Annulla</button>
-            <button className="button button-primary" onClick={saveProductData} disabled={saving}>
-              {saving ? 'Salvataggio...' : 'Salva e chiudi'}
-            </button>
+            <button className="button button-secondary" onClick={() => setEditingProduct(null)}>Chiudi</button>
           </div>
         </div>
       </div>
@@ -620,16 +794,16 @@ const AdminPanel = () => {
   return (
     <div className="admin-container">
       <div className="admin-header">
-        <h1>{t('labelGenerationAdmin')}</h1>
+        <h1>Generatore Retro Etichette</h1>
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
           <button className="button button-secondary button-small" onClick={() => navigate('/')}>
             Home
           </button>
           <button className="button button-secondary button-small" onClick={() => navigate('/archive')}>
-            Archivio
+            Etichette
           </button>
-          <span style={{ fontSize: '12px', color: '#888' }}>{user?.name}</span>
-          <button className="button button-secondary button-small" onClick={logout}>Esci</button>
+          <div style={{ width: '1px', height: '20px', background: '#ddd', margin: '0 4px' }}></div>
+          <button className="button button-secondary button-small" onClick={logout} style={{ color: '#999' }}>Esci</button>
         </div>
       </div>
 
@@ -869,38 +1043,36 @@ const AdminPanel = () => {
                       <th style={{ textAlign: 'left', padding: '10px 14px' }}>Prodotto</th>
                       <th style={{ textAlign: 'center', padding: '10px 8px', width: '70px' }}>Nutrizione</th>
                       <th style={{ textAlign: 'center', padding: '10px 8px', width: '80px' }}>Ingredienti</th>
-                      <th style={{ textAlign: 'center', padding: '10px 8px', width: '60px' }}>Stato</th>
+                      <th style={{ textAlign: 'center', padding: '10px 8px', width: '70px' }}>Materiali</th>
                       <th style={{ textAlign: 'center', padding: '10px 8px', width: '70px' }}></th>
                     </tr>
                   </thead>
                   <tbody>
                     {selectedProducts.map(product => {
-                      const { ready, missing } = getProductReadiness(product, selectedLanguage)
-                      const hasNutrition = !missing.includes('nutrition')
-                      const hasIngredients = !missing.includes(`ingredients_${selectedLanguage}`)
+                      const flags = confirmedFlags[product.slug] || {}
                       return (
                         <tr key={product.slug} style={{ borderBottom: '1px solid #f0f0f0' }}>
                           <td style={{ padding: '10px 14px' }}>
-                            <div style={{ fontWeight: 500 }}>{product.name}</div>
-                            <div style={{ fontSize: '11px', color: '#999' }}>{product.code}</div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                              {product.photo && (
+                                <img src={product.photo} alt="" style={{ width: '36px', height: '36px', objectFit: 'contain', borderRadius: '4px', flexShrink: 0 }} />
+                              )}
+                              <div>
+                                <div style={{ fontWeight: 500 }}>{product.name}</div>
+                                <div style={{ fontSize: '11px', color: '#999' }}>{product.code}{product.photo ? '' : ' · ⚠️ no foto'}</div>
+                              </div>
+                            </div>
                           </td>
-                          <td style={{ textAlign: 'center' }}>{hasNutrition ? '✅' : '❌'}</td>
-                          <td style={{ textAlign: 'center' }}>{hasIngredients ? '✅' : '❌'}</td>
-                          <td style={{ textAlign: 'center' }}>
-                            <span style={{
-                              display: 'inline-block', padding: '2px 8px', borderRadius: '10px', fontSize: '11px', fontWeight: 600,
-                              background: ready ? '#e8f5e9' : '#fff3e0', color: ready ? '#2e7d32' : '#e65100'
-                            }}>
-                              {ready ? 'OK' : 'Incompleto'}
-                            </span>
-                          </td>
+                          <td style={{ textAlign: 'center', fontSize: '16px' }}>{flags.nutrition ? '✅' : '⬜'}</td>
+                          <td style={{ textAlign: 'center', fontSize: '16px' }}>{flags.ingredients ? '✅' : '⬜'}</td>
+                          <td style={{ textAlign: 'center', fontSize: '16px' }}>{flags.materials ? '✅' : '⬜'}</td>
                           <td style={{ textAlign: 'center' }}>
                             <button onClick={() => openEditor(product)}
                               style={{
                                 padding: '4px 10px', fontSize: '12px', border: '1px solid #1976d2',
-                                background: ready ? '#fff' : '#e3f2fd', color: '#1976d2', borderRadius: '4px', cursor: 'pointer'
+                                background: (flags.nutrition && flags.ingredients && flags.materials) ? '#fff' : '#e3f2fd', color: '#1976d2', borderRadius: '4px', cursor: 'pointer'
                               }}>
-                              {ready ? 'Modifica' : 'Compila'}
+                              {(flags.nutrition && flags.ingredients && flags.materials) ? 'Modifica' : 'Compila'}
                             </button>
                           </td>
                         </tr>

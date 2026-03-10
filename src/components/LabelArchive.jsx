@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { useNavigate } from 'react-router-dom'
-import { searchLabels, getLabelStats, deleteLabel } from '../services/labelStore'
+import { searchLabels, getLabelStats, deleteLabel, regenerateLabel } from '../services/labelStore'
+import { downloadLabelPDF } from '../services/labelPrinter'
 
 const LANG_LABELS = {
   it: 'Italiano', de: 'Deutsch', fr: 'Français', es: 'Español', ja: '日本語'
@@ -59,12 +60,12 @@ const LabelArchive = () => {
   return (
     <div className="admin-container">
       <div className="admin-header">
-        <h1>Archivio Etichette</h1>
+        <h1>Etichette</h1>
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-          <span style={{ fontSize: '13px', color: '#666' }}>{user?.name}</span>
           <button className="button button-secondary button-small" onClick={() => navigate('/')}>Home</button>
-          <button className="button button-secondary button-small" onClick={() => navigate('/admin')}>Admin</button>
-          <button className="button button-secondary button-small" onClick={logout}>Esci</button>
+          <button className="button button-secondary button-small" onClick={() => navigate('/admin')}>Generatore</button>
+          <div style={{ width: '1px', height: '20px', background: '#ddd', margin: '0 4px' }}></div>
+          <button className="button button-secondary button-small" onClick={logout} style={{ color: '#999' }}>Esci</button>
         </div>
       </div>
 
@@ -155,7 +156,8 @@ const LabelArchive = () => {
               </div>
 
               <div className="archive-card-actions">
-                <button className="button button-small" onClick={() => downloadQR(label)}>Scarica QR</button>
+                <button className="button button-small" onClick={() => downloadLabelPDF(label)}>Retro Etichetta</button>
+                <button className="button button-small button-secondary" onClick={() => downloadQR(label)}>QR</button>
                 <a href={label.labelUrl} target="_blank" rel="noopener noreferrer" className="button button-small button-secondary">
                   Apri E-Label
                 </a>

@@ -4,17 +4,17 @@
     <meta charset="utf-8">
     <title>Redirecting...</title>
     <script>
-      // GitHub Pages SPA redirect
-      // Converts the path into a query string parameter so index.html can restore it
-      var pathSegmentsToKeep = 1; // /sake-elabel is the repo name (1 segment)
+      // GitHub Pages SPA redirect for custom domain (no repo prefix)
+      // Redirects /any/path?query to /?p=/any/path&q=query
       var l = window.location;
-      l.replace(
-        l.protocol + '//' + l.hostname + (l.port ? ':' + l.port : '') +
-        l.pathname.split('/').slice(0, 1 + pathSegmentsToKeep).join('/') + '/?/' +
-        l.pathname.slice(1).split('/').slice(pathSegmentsToKeep).join('/').replace(/&/g, '~and~') +
-        (l.search ? '&' + l.search.slice(1).replace(/&/g, '~and~') : '') +
-        l.hash
-      );
+      var path = l.pathname;
+      var search = l.search;
+      var hash = l.hash;
+      // Encode path and query into a single query string
+      var redirect = '/?p=' + encodeURIComponent(path) +
+        (search ? '&q=' + encodeURIComponent(search.slice(1)) : '') +
+        hash;
+      l.replace(l.protocol + '//' + l.host + redirect);
     </script>
   </head>
   <body>

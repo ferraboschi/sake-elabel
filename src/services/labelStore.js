@@ -36,7 +36,18 @@ export const getLabels = () => {
 }
 
 /**
- * Save a batch of generated labels
+ * Create a unique key for deduplication (product + language + country)
+ */
+const getLabelKey = (label) => {
+  const slug = label.productSlug || label.slug || ''
+  const lang = label.language || ''
+  const country = label.country || ''
+  return `${slug}__${lang}__${country}`
+}
+
+/**
+ * Save a batch of generated labels.
+ * Replaces any existing label with same product+language+country (deduplication).
  */
 export const saveLabels = (labels) => {
   const existing = getLabels()
@@ -63,9 +74,16 @@ export const saveLabels = (labels) => {
     ingredients: label.ingredients || null,
     bottleMaterialCode: label.bottleMaterialCode || '',
     capMaterialCode: label.capMaterialCode || '',
+    seimaibuai: label.seimaibuai || null,
   }))
 
-  const all = [...newLabels, ...existing]
+  // Build set of new label keys for deduplication
+  const newKeys = new Set(newLabels.map(l => getLabelKey(l)))
+
+  // Remove existing labels that match new ones (replace them)
+  const filtered = existing.filter(l => !newKeys.has(getLabelKey(l)))
+
+  const all = [...newLabels, ...filtered]
   localStorage.setItem(STORAGE_KEY, JSON.stringify(all))
   return newLabels
 }
@@ -119,4 +137,21 @@ export const getLabelStats = () => {
   return { total: labels.length, byLanguage, byCountry }
 }
 
-export default { getLabels, saveLabels, searchLabels, deleteLabel, getLabelStats }
+/**
+ * Regenerate (replace) a label in the store
+ */
+export const regenerateLabel = (id, newData) => {
+  const labels = getLabels()
+  const updated = labels.map(l => {
+    if (l.id !== id) return l
+    return {
+      ...l,
+      ...newData,
+      generatedAt: new Date().toISOString(),
+    }
+  })
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(updated))
+  return updated
+}
+
+export default { getLabels, saveLabels, searchLabels, deleteLabel, getLabelStats, regenerateLabel }

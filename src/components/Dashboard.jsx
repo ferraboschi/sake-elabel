@@ -13,9 +13,7 @@ const Dashboard = () => {
     return (
       <div className="container dashboard-container">
         <div className="dashboard-content">
-          <h1 className="dashboard-title" style={{ fontSize: '28px', marginBottom: '8px' }}>
-            Sake Company
-          </h1>
+          <img src={`${import.meta.env.BASE_URL}logo-sc.png`} alt="Sake Company" style={{ maxWidth: '220px', marginBottom: '12px' }} />
           <p style={{ color: '#888', fontSize: '15px', marginBottom: '40px' }}>
             Gestione E-Label EU
           </p>
@@ -47,22 +45,16 @@ const Dashboard = () => {
   const shortcuts = [
     {
       icon: '🏷️',
-      title: 'Genera Etichette',
+      title: 'Generatore Retro Etichette',
       desc: 'Seleziona prodotti, lingua e importatore. Genera QR code e PDF retro etichetta.',
       action: () => navigate('/admin'),
       primary: true,
     },
     {
       icon: '📦',
-      title: 'Archivio Etichette',
-      desc: 'Consulta lo storico delle etichette generate, scarica QR e PDF.',
+      title: 'Etichette',
+      desc: 'Consulta lo storico delle etichette generate, scarica retro etichette e QR.',
       action: () => navigate('/archive'),
-    },
-    {
-      icon: '🔗',
-      title: 'Anteprima E-Label',
-      desc: 'Vedi come appare la pagina web scansionando il QR code di un prodotto.',
-      action: () => navigate('/label/konishi-hiyashibori-gold-s093-1800'),
     },
   ]
 
@@ -72,13 +64,12 @@ const Dashboard = () => {
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px' }}>
           <div>
-            <h1 style={{ fontSize: '26px', margin: 0, fontWeight: 700 }}>Sake Company</h1>
+            <img src={`${import.meta.env.BASE_URL}logo-sc.png`} alt="Sake Company" style={{ maxWidth: '160px' }} />
             <p style={{ color: '#888', fontSize: '14px', margin: '4px 0 0' }}>Gestione E-Label EU</p>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <span style={{ fontSize: '13px', color: '#888' }}>{user?.name || user?.username}</span>
             <button className="button button-secondary button-small" onClick={logout}
-              style={{ fontSize: '12px' }}>
+              style={{ fontSize: '12px', color: '#999' }}>
               Esci
             </button>
           </div>
