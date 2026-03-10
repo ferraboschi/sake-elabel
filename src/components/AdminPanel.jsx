@@ -554,6 +554,9 @@ const AdminPanel = () => {
       <div className="admin-header">
         <h1>{t('labelGenerationAdmin')}</h1>
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <button className="button button-secondary button-small" onClick={() => navigate('/')}>
+            Home
+          </button>
           <button className="button button-secondary button-small" onClick={() => navigate('/archive')}>
             Archivio
           </button>

@@ -15,7 +15,7 @@ const Login = () => {
 
     const result = login(username.trim(), password)
     if (result.success) {
-      navigate('/admin')
+      navigate('/')
     } else {
       setError(result.error)
     }

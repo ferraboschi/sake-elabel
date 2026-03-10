@@ -62,6 +62,7 @@ const LabelArchive = () => {
         <h1>Archivio Etichette</h1>
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
           <span style={{ fontSize: '13px', color: '#666' }}>{user?.name}</span>
+          <button className="button button-secondary button-small" onClick={() => navigate('/')}>Home</button>
           <button className="button button-secondary button-small" onClick={() => navigate('/admin')}>Admin</button>
           <button className="button button-secondary button-small" onClick={logout}>Esci</button>
         </div>
