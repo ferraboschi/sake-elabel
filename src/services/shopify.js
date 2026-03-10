@@ -80,9 +80,9 @@ export const fetchShopifyProducts = async () => {
   let sinceId = 0
   const fields = 'id,title,body_html,variants,images,product_type,tags,handle,status'
 
-  // Paginate through all products (50 at a time, up to 500 total)
-  for (let page = 0; page < 10; page++) {
-    const params = new URLSearchParams({ limit: '50', fields })
+  // Paginate through all products (250 at a time, max 2000 total)
+  for (let page = 0; page < 8; page++) {
+    const params = new URLSearchParams({ limit: '250', fields })
     if (sinceId > 0) params.set('since_id', String(sinceId))
 
     try {
@@ -90,8 +90,9 @@ export const fetchShopifyProducts = async () => {
       const products = data.products || []
       allProducts.push(...products)
 
-      if (products.length < 50) break // No more products
+      if (products.length === 0) break // No more products
       sinceId = products[products.length - 1].id
+      if (products.length < 250) break // Last page
     } catch (err) {
       console.error(`Shopify fetch page ${page} failed:`, err)
       break
