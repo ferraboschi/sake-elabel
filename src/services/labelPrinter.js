@@ -59,6 +59,35 @@ async function loadPittogramma() {
   }
 }
 
+// ---- Box Icon Loader ----
+let cachedBoxIcon = null
+
+async function loadBoxIcon() {
+  if (cachedBoxIcon) return cachedBoxIcon
+  try {
+    const basePath = import.meta.env.BASE_URL || '/'
+    // Try JPG first (user-provided), then PNG (generated fallback)
+    for (const ext of ['jpg', 'png']) {
+      try {
+        const res = await fetch(`${basePath}icons/BOX.${ext}`)
+        if (!res.ok) continue
+        const buf = await res.arrayBuffer()
+        const bytes = new Uint8Array(buf)
+        let binary = ''
+        for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i])
+        const mime = ext === 'jpg' ? 'image/jpeg' : 'image/png'
+        cachedBoxIcon = `data:${mime};base64,` + btoa(binary)
+        console.log(`[LabelPrinter] Box icon loaded (${ext})`)
+        return cachedBoxIcon
+      } catch { continue }
+    }
+    throw new Error('No BOX icon found')
+  } catch (err) {
+    console.warn('[LabelPrinter] Box icon unavailable:', err.message)
+    return null
+  }
+}
+
 function registerJpFont(doc, fontBase64) {
   if (!fontBase64) return false
   doc.addFileToVFS('NotoSansJP-Regular.ttf', fontBase64)
@@ -242,11 +271,6 @@ export const generateLabelPDF = async (label, options = {}) => {
   const tmp = new jsPDF({ orientation: 'portrait', unit: 'mm', format: [W, 200] })
   let cy = M  // cursor y = top edge
 
-  // -- Box label banner (if applicable) --
-  if (label._isBoxLabel) {
-    cy += 4.5  // banner height (background bar + text + gap)
-  }
-
   // -- Title (adaptive sizing) --
   cy += 1.4  // margin to title top (design: 3.9 - 2.5 = 1.4)
   const titleText = (label.labelTitle || label.name || '').toUpperCase()
@@ -355,7 +379,7 @@ export const generateLabelPDF = async (label, options = {}) => {
     warnH += tmp.splitTextToSize(w, fWarnW).length * WARN_LS
   })
   warnH += WARN_LS * 0.3 + WARN_LS  // qrNutrition line
-  const qrColH = label._isBoxLabel ? QR_SIZE + 4.5 : QR_SIZE + 2.0  // space for QR + bottom row
+  const qrColH = QR_SIZE + 2.0  // space for QR/BOX icon + bottom row
   const footerH = Math.max(qrColH, warnH)
   cy += footerH
   cy += TH.body  // bottom row (Cod. + Lotto)
@@ -399,17 +423,6 @@ export const generateLabelPDF = async (label, options = {}) => {
   // =================================================================
   // RENDER
   // =================================================================
-
-  // --- Box label banner ---
-  if (label._isBoxLabel) {
-    doc.setFillColor(60, 60, 60)
-    doc.rect(OX + M, OY + M, CW, 3.5, 'F')
-    doc.setTextColor(255)
-    hFont(6, 'bold')
-    doc.text('ETICHETTA BOX', OX + M + CW / 2, OY + M + 2.3, { align: 'center' })
-    doc.setTextColor(0)
-    y += 4.5
-  }
 
   // --- Pittogramma (top-right) ---
   if (pittogrammaData) {
@@ -575,9 +588,11 @@ export const generateLabelPDF = async (label, options = {}) => {
 
   // QR code (or box icon for box labels)
   if (label._isBoxLabel && label._boxIconDataUrl) {
-    // Box label: show box icon instead of QR code
-    try { doc.addImage(label._boxIconDataUrl, 'PNG', OX + M, qrY, QR_SIZE, QR_SIZE) }
-    catch { doc.rect(OX + M, qrY, QR_SIZE, QR_SIZE) }
+    // Box label: show box icon instead of QR code (same size/position)
+    try {
+      const fmt = label._boxIconDataUrl.startsWith('data:image/jpeg') ? 'JPEG' : 'PNG'
+      doc.addImage(label._boxIconDataUrl, fmt, OX + M, qrY, QR_SIZE, QR_SIZE)
+    } catch { doc.rect(OX + M, qrY, QR_SIZE, QR_SIZE) }
   } else if (label.qr) {
     try { doc.addImage(label.qr, 'PNG', OX + M, qrY, QR_SIZE, QR_SIZE) }
     catch { doc.rect(OX + M, qrY, QR_SIZE, QR_SIZE) }
@@ -587,14 +602,6 @@ export const generateLabelPDF = async (label, options = {}) => {
     doc.rect(OX + M, qrY, QR_SIZE, QR_SIZE)
     doc.setFontSize(4)
     doc.text('QR CODE', OX + M + 4, qrY + 8)
-  }
-
-  // Box label indicator text
-  if (label._isBoxLabel) {
-    hFont(4.5, 'bold')
-    doc.setTextColor(120)
-    doc.text('BOX', OX + M + QR_SIZE / 2, qrY + QR_SIZE + 2.5, { align: 'center' })
-    doc.setTextColor(0)
   }
 
   // Avvertenze — cap top of "A" aligned with QR top edge
@@ -734,7 +741,10 @@ export const downloadLabelPDF = async (label, options) => {
  * Download box label PDF — replaces QR with box icon, uses box EAN
  */
 export const downloadBoxLabelPDF = async (label, options) => {
-  const boxIconDataUrl = generateBoxIconDataUrl(300)
+  // Load box icon from public/icons/ (BOX.jpg or BOX.png)
+  let boxIconDataUrl = await loadBoxIcon()
+  // Fallback to programmatic icon if file not found
+  if (!boxIconDataUrl) boxIconDataUrl = generateBoxIconDataUrl(300)
   const boxLabel = {
     ...label,
     barcode: label.barcodeBox || label.barcode,  // use box EAN
