@@ -112,7 +112,7 @@ const ProductList = ({
         {/* Table header */}
         <div style={{
           display: 'grid',
-          gridTemplateColumns: '32px 1fr 100px 80px 80px 120px',
+          gridTemplateColumns: '32px 1fr 100px 60px 60px 70px 60px 80px 120px',
           gap: '8px', padding: '10px 16px',
           background: '#f6f8fa', borderBottom: '1px solid #e3e8ee',
           fontSize: '11px', fontWeight: 600, color: '#8898aa',
@@ -122,6 +122,9 @@ const ProductList = ({
           <span>Prodotto / 製品</span>
           <span>Categoria</span>
           <span style={{ textAlign: 'center' }}>EAN</span>
+          <span style={{ textAlign: 'center' }}>EAN Box</span>
+          <span style={{ textAlign: 'center' }}>Bottiglia</span>
+          <span style={{ textAlign: 'center' }}>Tappo</span>
           <span style={{ textAlign: 'center' }}>Stato</span>
           <span></span>
         </div>
@@ -145,7 +148,7 @@ const ProductList = ({
                 key={product.slug}
                 style={{
                   display: 'grid',
-                  gridTemplateColumns: '32px 1fr 100px 80px 80px 120px',
+                  gridTemplateColumns: '32px 1fr 100px 60px 60px 70px 60px 80px 120px',
                   gap: '8px', padding: '12px 16px',
                   borderBottom: '1px solid #f0f3f5',
                   alignItems: 'center',
@@ -206,6 +209,56 @@ const ProductList = ({
                     ? <Badge color="#1e7a34" bg="#d4edda">✓</Badge>
                     : <Badge color="#856404" bg="#fff3cd">—</Badge>
                   }
+                </div>
+
+                {/* EAN Box */}
+                <div style={{ textAlign: 'center' }}>
+                  {product.barcodeBox
+                    ? <Badge color="#1e7a34" bg="#d4edda">✓</Badge>
+                    : <Badge color="#adb5bd" bg="#f0f0f0">—</Badge>
+                  }
+                </div>
+
+                {/* Bottiglia (colore + logo materiale) */}
+                <div style={{ textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '3px' }}>
+                  {product.bottleMaterialCode ? (
+                    <>
+                      {product.bottleColor && (
+                        <span style={{
+                          display: 'inline-block', width: '10px', height: '10px', borderRadius: '50%',
+                          border: '1px solid #ccc',
+                          background: product.bottleColor === 'Trasparente' ? '#f0f0f0'
+                            : product.bottleColor === 'Verde' ? '#2d7d3a'
+                            : product.bottleColor === 'Marrone' ? '#8B4513'
+                            : product.bottleColor === 'Nera' ? '#1a1a1a' : '#ddd',
+                        }} title={product.bottleColor} />
+                      )}
+                      <img
+                        src={`${import.meta.env.BASE_URL || '/'}icons/${product.bottleMaterialCode.replace(/\s/g, '').toLowerCase()}.png`}
+                        alt={product.bottleMaterialCode}
+                        title={`${product.bottleColor || ''} ${product.bottleMaterialCode}`}
+                        style={{ width: '20px', height: '20px', objectFit: 'contain' }}
+                        onError={e => { e.target.style.display = 'none' }}
+                      />
+                    </>
+                  ) : (
+                    <span style={{ color: '#adb5bd', fontSize: '11px' }}>—</span>
+                  )}
+                </div>
+
+                {/* Tappo (materiale) */}
+                <div style={{ textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  {product.capMaterialCode ? (
+                    <img
+                      src={`${import.meta.env.BASE_URL || '/'}icons/${product.capMaterialCode.replace(/[\s\/]/g, '').toLowerCase()}.png`}
+                      alt={product.capMaterialCode}
+                      title={`${product.capType || ''} ${product.capMaterialCode}`}
+                      style={{ width: '20px', height: '20px', objectFit: 'contain' }}
+                      onError={e => { e.target.replaceWith(document.createTextNode(product.capMaterialCode)) }}
+                    />
+                  ) : (
+                    <span style={{ color: '#adb5bd', fontSize: '11px' }}>—</span>
+                  )}
                 </div>
 
                 {/* Status */}
