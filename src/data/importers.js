@@ -73,6 +73,18 @@ export const REGION_CODE_TO_IMPORTER_COUNTRY = {
   ALB: 'Italia',
 }
 
+// Primary region codes: these are the "home" regions for each default importer.
+// Only primary regions auto-fill with the default importer.
+// Secondary regions (CHE, LUX, NLD, AUT, GBR, BEL, ALB) must be configured explicitly.
+export const PRIMARY_REGIONS = {
+  ITA: 'Italia',
+  DEU: 'Deutschland',
+  FRA: 'France',
+  ESP: 'España',
+}
+
+export const isPrimaryRegion = (regionCode) => regionCode in PRIMARY_REGIONS
+
 // Legacy aliases
 export const importers = defaultImporters
 
