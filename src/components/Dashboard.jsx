@@ -52,6 +52,7 @@ const Dashboard = () => {
       const withAlcohol = products.filter(p => p.alcoholPct).length
       const withVolume = products.filter(p => p.volumeMl).length
       const withOrigin = products.filter(p => p.countryOfOrigin).length
+      const withEanBox = products.filter(p => p.barcodeBox).length
 
       // Complete = has ingredients + alcohol + volume + EAN + origin
       const complete = products.filter(p =>
@@ -80,6 +81,7 @@ const Dashboard = () => {
           withAlcohol,
           withVolume,
           withOrigin,
+          withEanBox,
           categories,
         },
         labels: {
@@ -257,6 +259,7 @@ const Dashboard = () => {
                 <ProgressBar value={s.products.withIngredients} max={s.products.total} label="Ingredienti" color="#4caf50" />
                 <ProgressBar value={s.products.withAlcohol} max={s.products.total} label="Alcool %" color="#2196f3" />
                 <ProgressBar value={s.products.withEan} max={s.products.total} label="EAN" color="#ff9800" />
+                <ProgressBar value={s.products.withEanBox} max={s.products.total} label="EAN Box" color="#795548" />
                 <ProgressBar value={s.products.withNutrition} max={s.products.total} label="Nutrizione" color="#9c27b0" />
               </div>
             )}
