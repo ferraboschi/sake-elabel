@@ -597,14 +597,10 @@ export const generateLabelPDF = async (label, options = {}) => {
     doc.setTextColor(0)
   }
 
-  // Avvertenze — cap top of "A" must align with QR top edge
-  // jsPDF text() uses baseline; for Helvetica Bold 5.5pt the cap-height
-  // (baseline → top of capital letters) ≈ 0.714 × em = 0.714 × 1.94mm ≈ 1.385mm
-  // So baseline = qrY + capHeight to place cap top exactly at qrY
-  const warnCapH = F.warnHeader * 0.3528 * 0.714  // cap-height in mm
+  // Avvertenze (aligned with QR top)
   let wy = qrY
   hFont(F.warnHeader, 'bold')
-  doc.text(t.warn + ':', wX, qrY + warnCapH)
+  doc.text(t.warn + ':', wX, wy + BL.warnH)
   wy += TH.warnH + (WARN_LS - TH.warn)
 
   hFont(F.warn, 'normal')

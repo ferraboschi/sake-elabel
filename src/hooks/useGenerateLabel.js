@@ -16,7 +16,7 @@ export function useGenerateLabel() {
   const generateQR = async (slug, language, country) => {
     const url = `https://label.sakecompany.com/${slug}?lang=${language}&country=${country}`
     const canvas = await QRCode.toCanvas(document.createElement('canvas'), url, {
-      width: 400, errorCorrectionLevel: 'H', margin: 0,
+      width: 400, errorCorrectionLevel: 'H', margin: 2,
       color: { dark: '#000000', light: '#ffffff' }
     })
     return canvas.toDataURL('image/png')
