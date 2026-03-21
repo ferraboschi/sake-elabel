@@ -230,22 +230,22 @@ const Dashboard = () => {
           </div>
         )}
 
-        {/* Main grid — 2 columns */}
+        {/* Main action buttons */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '24px' }}>
 
-          {/* LEFT: Generatore Retro Etichette */}
+          {/* Generatore Retro Etichette */}
           <div
             onClick={() => navigate('/admin')}
             style={{
-              background: '#fafafa', border: '2px solid #222', borderRadius: '12px', padding: '20px',
-              cursor: 'pointer', transition: 'all 0.15s ease', gridColumn: '1 / -1',
+              background: '#fafafa', border: '2px solid #222', borderRadius: '12px', padding: '24px',
+              cursor: 'pointer', transition: 'all 0.15s ease',
             }}
             onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 4px 16px rgba(0,0,0,0.1)'; e.currentTarget.style.transform = 'translateY(-2px)' }}
             onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.transform = 'none' }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
-                <div style={{ fontSize: '15px', fontWeight: 700, marginBottom: '4px' }}>
+                <div style={{ fontSize: '16px', fontWeight: 700, marginBottom: '4px' }}>
                   🏷️ Generatore Retro Etichette
                 </div>
                 <div style={{ fontSize: '13px', color: '#666' }}>
@@ -256,12 +256,11 @@ const Dashboard = () => {
             </div>
             {s && (
               <div style={{ marginTop: '14px', borderTop: '1px solid #e8e8e8', paddingTop: '14px' }}>
-                {/* Bottle / Box summary */}
                 <div style={{ display: 'flex', gap: '20px', marginBottom: '12px', fontSize: '13px' }}>
                   <span>🍶 <strong>{s.products.withEan}</strong>/{s.products.total} pronti bottiglia</span>
                   <span>📦 <strong>{s.products.withEanBox}</strong>/{s.products.total} pronti box</span>
                 </div>
-                <div style={{ display: 'flex', gap: '24px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 24px' }}>
                   <ProgressBar value={s.products.withIngredients} max={s.products.total} label="Ingredienti" color="#4caf50" />
                   <ProgressBar value={s.products.withAlcohol} max={s.products.total} label="Alcool %" color="#2196f3" />
                   <ProgressBar value={s.products.withEan} max={s.products.total} label="EAN Bottiglia" color="#ff9800" />
@@ -272,47 +271,44 @@ const Dashboard = () => {
             )}
           </div>
 
-          {/* Etichette per Container */}
-          <div
-            onClick={() => navigate('/containers')}
-            style={{
-              background: '#fff', border: '1px solid #e0e0e0', borderRadius: '12px', padding: '20px',
-              cursor: 'pointer', transition: 'all 0.15s ease',
-            }}
-            onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.06)'; e.currentTarget.style.transform = 'translateY(-2px)' }}
-            onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.transform = 'none' }}
-          >
-            <div style={{ fontSize: '15px', fontWeight: 700, marginBottom: '4px' }}>
-              🚢 Etichette per Container
-            </div>
-            <div style={{ fontSize: '13px', color: '#666', lineHeight: 1.4 }}>
-              Leggi la lista prodotti da Dropbox, genera QR code per ogni spedizione.
-            </div>
-          </div>
-
           {/* Archivio Etichette */}
           <div
             onClick={() => navigate('/archive')}
             style={{
-              background: '#fff', border: '1px solid #e0e0e0', borderRadius: '12px', padding: '20px',
+              background: '#fafafa', border: '2px solid #222', borderRadius: '12px', padding: '24px',
               cursor: 'pointer', transition: 'all 0.15s ease',
             }}
-            onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.06)'; e.currentTarget.style.transform = 'translateY(-2px)' }}
+            onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 4px 16px rgba(0,0,0,0.1)'; e.currentTarget.style.transform = 'translateY(-2px)' }}
             onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.transform = 'none' }}
           >
-            <div style={{ fontSize: '15px', fontWeight: 700, marginBottom: '4px' }}>
-              📦 Archivio Etichette
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <div style={{ fontSize: '16px', fontWeight: 700, marginBottom: '4px' }}>
+                  📦 Archivio Etichette
+                </div>
+                <div style={{ fontSize: '13px', color: '#666' }}>
+                  Consulta lo storico delle etichette generate, scarica retro etichette e QR.
+                </div>
+              </div>
+              <div style={{ fontSize: '22px', color: '#bbb' }}>→</div>
             </div>
-            <div style={{ fontSize: '13px', color: '#666', lineHeight: 1.4, marginBottom: '10px' }}>
-              Consulta lo storico delle etichette generate, scarica retro etichette e QR.
-            </div>
-            {s && s.labels.total > 0 && (
-              <div style={{ fontSize: '12px', color: '#888', borderTop: '1px solid #f0f0f0', paddingTop: '8px' }}>
-                {s.labels.recent > 0 && <span style={{ color: '#4caf50', fontWeight: 600 }}>{s.labels.recent} questa settimana</span>}
-                {s.labels.recent > 0 && ' · '}
-                {s.labels.total} totali
-                {Object.keys(s.labels.byLanguage).length > 0 && (
-                  <span> · {Object.entries(s.labels.byLanguage).map(([l, c]) => `${l.toUpperCase()}: ${c}`).join(', ')}</span>
+            {s && (
+              <div style={{ marginTop: '14px', borderTop: '1px solid #e8e8e8', paddingTop: '14px' }}>
+                <div style={{ display: 'flex', gap: '20px', marginBottom: '12px', fontSize: '13px' }}>
+                  <span><strong>{s.labels.total}</strong> etichette totali</span>
+                  {s.labels.recent > 0 && <span style={{ color: '#4caf50' }}>✦ <strong>{s.labels.recent}</strong> questa settimana</span>}
+                </div>
+                {Object.keys(s.labels.byLanguage || {}).length > 0 && (
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                    {Object.entries(s.labels.byLanguage).map(([l, c]) => (
+                      <span key={l} style={{
+                        background: '#e8e8e8', borderRadius: '6px', padding: '2px 8px',
+                        fontSize: '12px', fontWeight: 600, color: '#555',
+                      }}>
+                        {l.toUpperCase()}: {c}
+                      </span>
+                    ))}
+                  </div>
                 )}
               </div>
             )}

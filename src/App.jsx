@@ -7,7 +7,6 @@ import ELabel from './components/ELabel'
 // Lazy load heavy admin components (jsPDF, QRCode, etc.)
 const AdminPanel = lazy(() => import('./components/AdminPanel'))
 const LabelArchive = lazy(() => import('./components/LabelArchive'))
-const ContainerLabels = lazy(() => import('./components/ContainerLabels'))
 const Login = lazy(() => import('./components/Login'))
 const SupplierPortal = lazy(() => import('./components/SupplierPortal'))
 const ImporterManager = lazy(() => import('./components/ImporterManager'))
@@ -47,11 +46,6 @@ function App() {
         <Route path="/archive" element={
           <ProtectedRoute allowedRoles={['admin', 'partner']}>
             <LabelArchive />
-          </ProtectedRoute>
-        } />
-        <Route path="/containers" element={
-          <ProtectedRoute allowedRoles={['admin', 'partner']}>
-            <ContainerLabels />
           </ProtectedRoute>
         } />
         <Route path="/importers" element={
