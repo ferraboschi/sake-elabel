@@ -296,8 +296,8 @@ const AdminPanel = () => {
     return Object.keys(REGION_CODE_LABELS)
   })()
 
-  // Get importers for currently selected region (importerVersion triggers re-read)
-  const importersForRegion = (() => { void importerVersion; return getImportersForRegion(selectedRegion) })()
+  // Get importers for currently selected region — only complete ones (name + address)
+  const importersForRegion = (() => { void importerVersion; return getImportersForRegion(selectedRegion, { onlyComplete: true }) })()
   const importer = importersForRegion.find(i => i.id === selectedImporterId) || importersForRegion[0] || null
   const hasValidImporter = importer && importer.name
   const selectedCountry = REGION_CODE_LABELS[selectedRegion]?.label || selectedRegion

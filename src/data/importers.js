@@ -110,6 +110,34 @@ export const updateCustomImporter = (id, updates) => {
 }
 
 /**
+ * Update a default (built-in) importer override in localStorage.
+ * Stores overrides separately so defaults can be edited without losing originals.
+ */
+const DEFAULT_OVERRIDES_KEY = 'sake-elabel-importer-defaults'
+
+export const getDefaultOverrides = () => {
+  try {
+    return JSON.parse(localStorage.getItem(DEFAULT_OVERRIDES_KEY) || '{}')
+  } catch { return {} }
+}
+
+export const updateDefaultImporter = (countryKey, updates) => {
+  const overrides = getDefaultOverrides()
+  overrides[countryKey] = { ...(overrides[countryKey] || {}), ...updates }
+  localStorage.setItem(DEFAULT_OVERRIDES_KEY, JSON.stringify(overrides))
+}
+
+/**
+ * Get an effective default importer (original merged with overrides)
+ */
+export const getEffectiveDefault = (countryKey) => {
+  const base = defaultImporters[countryKey]
+  if (!base) return null
+  const overrides = getDefaultOverrides()
+  return { ...base, ...(overrides[countryKey] || {}) }
+}
+
+/**
  * Delete a custom importer by ID
  */
 export const removeCustomImporter = (id) => {
@@ -119,15 +147,17 @@ export const removeCustomImporter = (id) => {
 
 /**
  * Get all importers for a given region code (built-in from mapped country + custom for this region)
+ * @param {string} regionCode
+ * @param {object} options - { onlyComplete: false } — if true, only return importers with name AND address
  */
-export const getImportersForRegion = (regionCode) => {
+export const getImportersForRegion = (regionCode, options = {}) => {
   const result = []
-  // Get default importer from mapped country
+  // Get default importer from mapped country (with overrides applied)
   const importerCountry = REGION_CODE_TO_IMPORTER_COUNTRY[regionCode]
   if (importerCountry) {
-    const builtIn = defaultImporters[importerCountry]
+    const builtIn = getEffectiveDefault(importerCountry)
     if (builtIn && builtIn.name) {
-      result.push(builtIn)
+      result.push({ ...builtIn, _default: true, _country: importerCountry })
     }
   }
   // Get custom importers saved for this specific region
@@ -136,6 +166,11 @@ export const getImportersForRegion = (regionCode) => {
     i.regionCode === regionCode || i.country === regionLabel || i.country === (REGION_CODE_TO_IMPORTER_COUNTRY[regionCode] || '')
   )
   result.push(...custom)
+
+  // Filter to only complete importers (name + address) if requested
+  if (options.onlyComplete) {
+    return result.filter(i => i.name && i.name.trim() && i.address && i.address.trim())
+  }
   return result
 }
 
@@ -158,8 +193,9 @@ export const getImportersForCountry = (country) => {
  */
 export const getAllImporters = () => {
   const result = []
-  for (const [country, imp] of Object.entries(defaultImporters)) {
-    if (imp.name) result.push(imp)
+  for (const [country] of Object.entries(defaultImporters)) {
+    const eff = getEffectiveDefault(country)
+    if (eff && eff.name) result.push({ ...eff, _default: true, _country: country })
   }
   result.push(...getCustomImporters())
   return result

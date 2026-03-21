@@ -197,35 +197,47 @@ const Dashboard = () => {
         {/* Top summary cards row */}
         {s && (
           <div style={{
-            display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '24px'
+            display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '12px', marginBottom: '24px'
           }}>
             <div style={{
-              background: '#fff', border: '1px solid #e0e0e0', borderRadius: '10px', padding: '18px 16px', textAlign: 'center',
+              background: '#fff', border: '1px solid #e0e0e0', borderRadius: '10px', padding: '16px 12px', textAlign: 'center',
             }}>
-              <div style={{ fontSize: '28px', fontWeight: 700, color: '#222' }}>{s.products.total}</div>
-              <div style={{ fontSize: '12px', color: '#888', marginTop: '2px' }}>Prodotti</div>
+              <div style={{ fontSize: '26px', fontWeight: 700, color: '#222' }}>{s.products.total}</div>
+              <div style={{ fontSize: '11px', color: '#888', marginTop: '2px' }}>Prodotti</div>
             </div>
             <div style={{
-              background: '#fff', border: '1px solid #e0e0e0', borderRadius: '10px', padding: '18px 16px', textAlign: 'center',
+              background: '#fff', border: '1px solid #e0e0e0', borderRadius: '10px', padding: '16px 12px', textAlign: 'center',
             }}>
-              <div style={{ fontSize: '28px', fontWeight: 700, color: s.products.complete === s.products.total ? '#4caf50' : '#f57c00' }}>
+              <div style={{ fontSize: '26px', fontWeight: 700, color: s.products.complete === s.products.total ? '#4caf50' : '#f57c00' }}>
                 {s.products.complete}
               </div>
-              <div style={{ fontSize: '12px', color: '#888', marginTop: '2px' }}>Completi</div>
+              <div style={{ fontSize: '11px', color: '#888', marginTop: '2px' }}>Completi</div>
             </div>
             <div style={{
-              background: '#fff', border: '1px solid #e0e0e0', borderRadius: '10px', padding: '18px 16px', textAlign: 'center',
+              background: '#fff', border: '1px solid #e0e0e0', borderRadius: '10px', padding: '16px 12px', textAlign: 'center',
             }}>
-              <div style={{ fontSize: '28px', fontWeight: 700, color: '#1565c0' }}>{s.labels.total}</div>
-              <div style={{ fontSize: '12px', color: '#888', marginTop: '2px' }}>Etichette</div>
+              <div style={{ fontSize: '26px', fontWeight: 700, color: '#1565c0' }}>{s.labels.total}</div>
+              <div style={{ fontSize: '11px', color: '#888', marginTop: '2px' }}>
+                <span style={{ fontSize: '14px' }}>🍶</span> Etichette Bottiglia
+              </div>
             </div>
             <div style={{
-              background: '#fff', border: '1px solid #e0e0e0', borderRadius: '10px', padding: '18px 16px', textAlign: 'center',
+              background: '#fff', border: '1px solid #e0e0e0', borderRadius: '10px', padding: '16px 12px', textAlign: 'center',
             }}>
-              <div style={{ fontSize: '28px', fontWeight: 700, color: '#222' }}>
+              <div style={{ fontSize: '26px', fontWeight: 700, color: '#795548' }}>{s.products.withEanBox}</div>
+              <div style={{ fontSize: '11px', color: '#888', marginTop: '2px' }}>
+                <span style={{ fontSize: '14px' }}>📦</span> Etichette Box
+              </div>
+            </div>
+            <div style={{
+              background: '#fff', border: '1px solid #e0e0e0', borderRadius: '10px', padding: '16px 12px', textAlign: 'center',
+            }}>
+              <div style={{ fontSize: '26px', fontWeight: 700, color: '#222' }}>
                 {s.importers.regionsCovered}/{s.importers.regionsTotal}
               </div>
-              <div style={{ fontSize: '12px', color: '#888', marginTop: '2px' }}>Paesi</div>
+              <div style={{ fontSize: '11px', color: '#888', marginTop: '2px' }}>
+                <span style={{ fontSize: '14px' }}>🌍</span> Paesi
+              </div>
             </div>
           </div>
         )}
