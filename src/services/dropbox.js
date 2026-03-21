@@ -2,25 +2,85 @@
  * Dropbox API Service
  * Reads container folders and XLSX product lists from Dropbox
  *
- * NOTE: For Dropbox Business/Team accounts, we need the Dropbox-API-Path-Root header
- * to access team folders. The root_namespace_id is obtained from get_current_account.
+ * Uses OAuth2 refresh token for auto-renewing access.
+ * The refresh token never expires; access tokens are refreshed automatically.
  */
 
-const DROPBOX_TOKEN = import.meta.env.VITE_DROPBOX_TOKEN || ''
+const DROPBOX_REFRESH_TOKEN = import.meta.env.VITE_DROPBOX_REFRESH_TOKEN || ''
+const DROPBOX_APP_KEY = import.meta.env.VITE_DROPBOX_APP_KEY || ''
+const DROPBOX_APP_SECRET = import.meta.env.VITE_DROPBOX_APP_SECRET || ''
 const DROPBOX_FOLDER = import.meta.env.VITE_DROPBOX_FOLDER || '/lorenzo ferraboschi/SC importazioni'
 const DROPBOX_ROOT_NS = import.meta.env.VITE_DROPBOX_ROOT_NAMESPACE || ''
 
-export const isDropboxConfigured = () => !!DROPBOX_TOKEN && DROPBOX_TOKEN.length > 10
+// Legacy: support direct token for backward compatibility
+const DROPBOX_TOKEN_LEGACY = import.meta.env.VITE_DROPBOX_TOKEN || ''
+
+// In-memory token cache
+let _cachedToken = null
+let _tokenExpiry = 0
+
+export const isDropboxConfigured = () => {
+  // Configured if we have refresh token + app credentials, OR a legacy direct token
+  return (!!DROPBOX_REFRESH_TOKEN && !!DROPBOX_APP_KEY && !!DROPBOX_APP_SECRET) ||
+         (!!DROPBOX_TOKEN_LEGACY && DROPBOX_TOKEN_LEGACY.length > 10)
+}
+
+/**
+ * Get a valid access token, refreshing if needed.
+ * Caches the token in memory and auto-refreshes before expiry.
+ */
+const getAccessToken = async () => {
+  // If we have refresh token setup, use it
+  if (DROPBOX_REFRESH_TOKEN && DROPBOX_APP_KEY && DROPBOX_APP_SECRET) {
+    const now = Date.now()
+    // Refresh if expired or within 5 min of expiry
+    if (_cachedToken && _tokenExpiry > now + 5 * 60 * 1000) {
+      return _cachedToken
+    }
+
+    // Refresh the token
+    const params = new URLSearchParams({
+      grant_type: 'refresh_token',
+      refresh_token: DROPBOX_REFRESH_TOKEN,
+      client_id: DROPBOX_APP_KEY,
+      client_secret: DROPBOX_APP_SECRET,
+    })
+
+    const resp = await fetch('https://api.dropboxapi.com/oauth2/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: params.toString(),
+    })
+
+    if (!resp.ok) {
+      const err = await resp.text()
+      throw new Error(`Dropbox token refresh failed: ${err}`)
+    }
+
+    const data = await resp.json()
+    _cachedToken = data.access_token
+    _tokenExpiry = now + (data.expires_in * 1000)
+    console.log('[Dropbox] Token refreshed, expires in', data.expires_in, 'seconds')
+    return _cachedToken
+  }
+
+  // Fallback to legacy direct token
+  if (DROPBOX_TOKEN_LEGACY) {
+    return DROPBOX_TOKEN_LEGACY
+  }
+
+  throw new Error('Dropbox non configurato')
+}
 
 /**
  * Common headers for all Dropbox API calls
  */
-const apiHeaders = () => {
+const apiHeaders = async () => {
+  const token = await getAccessToken()
   const h = {
-    'Authorization': `Bearer ${DROPBOX_TOKEN}`,
+    'Authorization': `Bearer ${token}`,
     'Content-Type': 'application/json',
   }
-  // Add root namespace header for team Dropbox accounts
   if (DROPBOX_ROOT_NS) {
     h['Dropbox-API-Path-Root'] = JSON.stringify({ '.tag': 'root', root: DROPBOX_ROOT_NS })
   }
@@ -30,9 +90,10 @@ const apiHeaders = () => {
 /**
  * Headers for content download (no Content-Type, needs Dropbox-API-Arg)
  */
-const downloadHeaders = (filePath) => {
+const downloadHeaders = async (filePath) => {
+  const token = await getAccessToken()
   const h = {
-    'Authorization': `Bearer ${DROPBOX_TOKEN}`,
+    'Authorization': `Bearer ${token}`,
     'Dropbox-API-Arg': JSON.stringify({ path: filePath }),
   }
   if (DROPBOX_ROOT_NS) {
@@ -49,7 +110,7 @@ export const listContainerFolders = async () => {
 
   const response = await fetch('https://api.dropboxapi.com/2/files/list_folder', {
     method: 'POST',
-    headers: apiHeaders(),
+    headers: await apiHeaders(),
     body: JSON.stringify({
       path: DROPBOX_FOLDER,
       recursive: false,
@@ -91,7 +152,7 @@ export const listFolderContents = async (folderPath) => {
   // First call
   let response = await fetch('https://api.dropboxapi.com/2/files/list_folder', {
     method: 'POST',
-    headers: apiHeaders(),
+    headers: await apiHeaders(),
     body: JSON.stringify({
       path: folderPath,
       recursive: true,
@@ -113,7 +174,7 @@ export const listFolderContents = async (folderPath) => {
   while (hasMore) {
     response = await fetch('https://api.dropboxapi.com/2/files/list_folder/continue', {
       method: 'POST',
-      headers: apiHeaders(),
+      headers: await apiHeaders(),
       body: JSON.stringify({ cursor }),
     })
     data = await response.json()
@@ -140,7 +201,7 @@ export const downloadFile = async (filePath) => {
 
   const response = await fetch('https://content.dropboxapi.com/2/files/download', {
     method: 'POST',
-    headers: downloadHeaders(filePath),
+    headers: await downloadHeaders(filePath),
   })
 
   if (!response.ok) {
