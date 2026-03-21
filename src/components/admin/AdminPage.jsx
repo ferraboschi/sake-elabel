@@ -19,6 +19,28 @@ import ProductEditor from './ProductEditor'
  *   /admin → product list
  *   /admin/product/:slug → single product editor
  */
+// Non-blocking toast notification
+const Toast = ({ message, onClose }) => {
+  useEffect(() => {
+    const timer = setTimeout(onClose, 4000)
+    return () => clearTimeout(timer)
+  }, [onClose])
+
+  return (
+    <div style={{
+      position: 'fixed', bottom: '24px', right: '24px', zIndex: 9999,
+      background: '#0a2540', color: '#fff', padding: '14px 24px',
+      borderRadius: '10px', fontSize: '14px', fontWeight: 500,
+      boxShadow: '0 8px 24px rgba(0,0,0,0.25)',
+      display: 'flex', alignItems: 'center', gap: '10px',
+      animation: 'fadeIn 0.3s ease',
+    }}>
+      <span style={{ fontSize: '18px' }}>✓</span>
+      {message}
+    </div>
+  )
+}
+
 const AdminPage = () => {
   const { slug } = useParams()
   const navigate = useNavigate()
@@ -26,6 +48,7 @@ const AdminPage = () => {
   const { user } = useAuth()
   const products = useProducts()
   const labelGen = useGenerateLabel()
+  const [toast, setToast] = useState(null)
 
   // Shared selectors state
   const [selectedLanguage, setSelectedLanguage] = useState('it')
@@ -84,7 +107,7 @@ const AdminPage = () => {
     const handleGenerate = async (prods, opts) => {
       const labels = await labelGen.generate(prods, opts)
       if (labels.length > 0) {
-        alert(`Generazione completata! ${labels.length} etichett${labels.length === 1 ? 'a' : 'e'} scaricat${labels.length === 1 ? 'a' : 'e'}.`)
+        setToast(`Generazione completata! ${labels.length} etichett${labels.length === 1 ? 'a' : 'e'} scaricat${labels.length === 1 ? 'a' : 'e'}.`)
       }
     }
 
@@ -118,6 +141,7 @@ const AdminPage = () => {
           allProducts={products.allProducts}
           setAllProducts={products.setAllProducts}
         />
+        {toast && <Toast message={toast} onClose={() => setToast(null)} />}
       </AdminLayout>
     )
   }
@@ -135,7 +159,7 @@ const AdminPage = () => {
       reviewEdits: {},
     })
     if (labels.length > 0) {
-      alert(`Ristampa completata! ${labels.length} etichette scaricate.`)
+      setToast(`Ristampa completata! ${labels.length} etichette scaricate.`)
       setReprintSlugs(new Set())
     }
   }
@@ -189,6 +213,8 @@ const AdminPage = () => {
         generating={labelGen.generating}
         onGenerateReprint={handleGenerateReprint}
       />
+      {/* Toast notification */}
+      {toast && <Toast message={toast} onClose={() => setToast(null)} />}
     </AdminLayout>
   )
 }
