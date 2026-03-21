@@ -197,47 +197,35 @@ const Dashboard = () => {
         {/* Top summary cards row */}
         {s && (
           <div style={{
-            display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '12px', marginBottom: '24px'
+            display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '24px'
           }}>
             <div style={{
-              background: '#fff', border: '1px solid #e0e0e0', borderRadius: '10px', padding: '16px 12px', textAlign: 'center',
+              background: '#fff', border: '1px solid #e0e0e0', borderRadius: '10px', padding: '18px 16px', textAlign: 'center',
             }}>
-              <div style={{ fontSize: '26px', fontWeight: 700, color: '#222' }}>{s.products.total}</div>
-              <div style={{ fontSize: '11px', color: '#888', marginTop: '2px' }}>Prodotti</div>
+              <div style={{ fontSize: '28px', fontWeight: 700, color: '#222' }}>{s.products.total}</div>
+              <div style={{ fontSize: '12px', color: '#888', marginTop: '2px' }}>Prodotti</div>
             </div>
             <div style={{
-              background: '#fff', border: '1px solid #e0e0e0', borderRadius: '10px', padding: '16px 12px', textAlign: 'center',
+              background: '#fff', border: '1px solid #e0e0e0', borderRadius: '10px', padding: '18px 16px', textAlign: 'center',
             }}>
-              <div style={{ fontSize: '26px', fontWeight: 700, color: s.products.complete === s.products.total ? '#4caf50' : '#f57c00' }}>
+              <div style={{ fontSize: '28px', fontWeight: 700, color: s.products.complete === s.products.total ? '#4caf50' : '#f57c00' }}>
                 {s.products.complete}
               </div>
-              <div style={{ fontSize: '11px', color: '#888', marginTop: '2px' }}>Completi</div>
+              <div style={{ fontSize: '12px', color: '#888', marginTop: '2px' }}>Completi</div>
             </div>
             <div style={{
-              background: '#fff', border: '1px solid #e0e0e0', borderRadius: '10px', padding: '16px 12px', textAlign: 'center',
+              background: '#fff', border: '1px solid #e0e0e0', borderRadius: '10px', padding: '18px 16px', textAlign: 'center',
             }}>
-              <div style={{ fontSize: '26px', fontWeight: 700, color: '#1565c0' }}>{s.labels.total}</div>
-              <div style={{ fontSize: '11px', color: '#888', marginTop: '2px' }}>
-                <span style={{ fontSize: '14px' }}>🍶</span> Etichette Bottiglia
-              </div>
+              <div style={{ fontSize: '28px', fontWeight: 700, color: '#1565c0' }}>{s.labels.total}</div>
+              <div style={{ fontSize: '12px', color: '#888', marginTop: '2px' }}>Etichette</div>
             </div>
             <div style={{
-              background: '#fff', border: '1px solid #e0e0e0', borderRadius: '10px', padding: '16px 12px', textAlign: 'center',
+              background: '#fff', border: '1px solid #e0e0e0', borderRadius: '10px', padding: '18px 16px', textAlign: 'center',
             }}>
-              <div style={{ fontSize: '26px', fontWeight: 700, color: '#795548' }}>{s.products.withEanBox}</div>
-              <div style={{ fontSize: '11px', color: '#888', marginTop: '2px' }}>
-                <span style={{ fontSize: '14px' }}>📦</span> Etichette Box
-              </div>
-            </div>
-            <div style={{
-              background: '#fff', border: '1px solid #e0e0e0', borderRadius: '10px', padding: '16px 12px', textAlign: 'center',
-            }}>
-              <div style={{ fontSize: '26px', fontWeight: 700, color: '#222' }}>
+              <div style={{ fontSize: '28px', fontWeight: 700, color: '#222' }}>
                 {s.importers.regionsCovered}/{s.importers.regionsTotal}
               </div>
-              <div style={{ fontSize: '11px', color: '#888', marginTop: '2px' }}>
-                <span style={{ fontSize: '14px' }}>🌍</span> Paesi
-              </div>
+              <div style={{ fontSize: '12px', color: '#888', marginTop: '2px' }}>Paesi</div>
             </div>
           </div>
         )}
@@ -267,12 +255,19 @@ const Dashboard = () => {
               <div style={{ fontSize: '22px', color: '#bbb' }}>→</div>
             </div>
             {s && (
-              <div style={{ display: 'flex', gap: '24px', marginTop: '14px', borderTop: '1px solid #e8e8e8', paddingTop: '14px' }}>
-                <ProgressBar value={s.products.withIngredients} max={s.products.total} label="Ingredienti" color="#4caf50" />
-                <ProgressBar value={s.products.withAlcohol} max={s.products.total} label="Alcool %" color="#2196f3" />
-                <ProgressBar value={s.products.withEan} max={s.products.total} label="EAN" color="#ff9800" />
-                <ProgressBar value={s.products.withEanBox} max={s.products.total} label="EAN Box" color="#795548" />
-                <ProgressBar value={s.products.withNutrition} max={s.products.total} label="Nutrizione" color="#9c27b0" />
+              <div style={{ marginTop: '14px', borderTop: '1px solid #e8e8e8', paddingTop: '14px' }}>
+                {/* Bottle / Box summary */}
+                <div style={{ display: 'flex', gap: '20px', marginBottom: '12px', fontSize: '13px' }}>
+                  <span>🍶 <strong>{s.products.withEan}</strong>/{s.products.total} pronti bottiglia</span>
+                  <span>📦 <strong>{s.products.withEanBox}</strong>/{s.products.total} pronti box</span>
+                </div>
+                <div style={{ display: 'flex', gap: '24px' }}>
+                  <ProgressBar value={s.products.withIngredients} max={s.products.total} label="Ingredienti" color="#4caf50" />
+                  <ProgressBar value={s.products.withAlcohol} max={s.products.total} label="Alcool %" color="#2196f3" />
+                  <ProgressBar value={s.products.withEan} max={s.products.total} label="EAN Bottiglia" color="#ff9800" />
+                  <ProgressBar value={s.products.withEanBox} max={s.products.total} label="EAN Box" color="#795548" />
+                  <ProgressBar value={s.products.withNutrition} max={s.products.total} label="Nutrizione" color="#9c27b0" />
+                </div>
               </div>
             )}
           </div>
@@ -309,7 +304,7 @@ const Dashboard = () => {
               📦 Archivio Etichette
             </div>
             <div style={{ fontSize: '13px', color: '#666', lineHeight: 1.4, marginBottom: '10px' }}>
-              Consulta lo storico delle etichette generate.
+              Consulta lo storico delle etichette generate, scarica retro etichette e QR.
             </div>
             {s && s.labels.total > 0 && (
               <div style={{ fontSize: '12px', color: '#888', borderTop: '1px solid #f0f0f0', paddingTop: '8px' }}>
