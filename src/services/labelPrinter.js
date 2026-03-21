@@ -350,7 +350,7 @@ export const generateLabelPDF = async (label, options = {}) => {
   const fWarnW = W - M - fWarnX
 
   tmp.setFontSize(F.warn)
-  let warnH = 0.5 + TH.warnH  // gap to avvertenze header bottom
+  let warnH = WARN_LS  // avvertenze header line
   warnings.forEach(w => {
     warnH += tmp.splitTextToSize(w, fWarnW).length * WARN_LS
   })
@@ -597,11 +597,11 @@ export const generateLabelPDF = async (label, options = {}) => {
     doc.setTextColor(0)
   }
 
-  // Avvertenze (aligned with QR top)
+  // Avvertenze — cap top of "A" aligned with QR top edge
   let wy = qrY
   hFont(F.warnHeader, 'bold')
-  doc.text(t.warn + ':', wX, wy + BL.warnH)
-  wy += TH.warnH + (WARN_LS - TH.warn)
+  doc.text(t.warn + ':', wX, wy)
+  wy += WARN_LS
 
   hFont(F.warn, 'normal')
   warnings.forEach(warn => {
