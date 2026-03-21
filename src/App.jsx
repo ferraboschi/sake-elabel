@@ -4,8 +4,8 @@ import { useAuth } from './contexts/AuthContext'
 import Dashboard from './components/Dashboard'
 import ELabel from './components/ELabel'
 
-// Lazy load heavy admin components (jsPDF, QRCode, etc.)
-const AdminPanel = lazy(() => import('./components/AdminPanel'))
+// Lazy load heavy components
+const AdminPage = lazy(() => import('./components/admin/AdminPage'))
 const LabelArchive = lazy(() => import('./components/LabelArchive'))
 const Login = lazy(() => import('./components/Login'))
 const SupplierPortal = lazy(() => import('./components/SupplierPortal'))
@@ -37,10 +37,15 @@ function App() {
         <Route path="/label/:productSlug" element={<ELabel />} />
         <Route path="/product/:productSlug" element={<ELabel />} />
 
-        {/* Protected routes - admin + partner */}
+        {/* Protected routes — each page has its own URL */}
         <Route path="/admin" element={
           <ProtectedRoute allowedRoles={['admin', 'partner']}>
-            <AdminPanel />
+            <AdminPage />
+          </ProtectedRoute>
+        } />
+        <Route path="/admin/product/:slug" element={
+          <ProtectedRoute allowedRoles={['admin', 'partner']}>
+            <AdminPage />
           </ProtectedRoute>
         } />
         <Route path="/archive" element={
