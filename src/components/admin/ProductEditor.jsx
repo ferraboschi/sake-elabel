@@ -47,7 +47,14 @@ const ProductEditor = ({
   useEffect(() => {
     if (!product) return
     const detCat = detectDetailedCategory(product.name, product.category || '', product.shopifyType || '')
-    const existingIngredients = product.ingredients?.[selectedLanguage] || product.ingredients?.it || ''
+    // Prefer ingredients in selected language; only fallback to 'it' if same script
+    const langIngredients = product.ingredients?.[selectedLanguage] || ''
+    const fallbackIngredients = (selectedLanguage !== 'ja' && product.ingredients?.it) || ''
+    // If the stored text looks like Japanese (contains CJK) but language is not ja, skip it
+    const isCJK = (text) => /[\u3000-\u9fff]/.test(text)
+    const existingIngredients = langIngredients && !(selectedLanguage !== 'ja' && isCJK(langIngredients))
+      ? langIngredients
+      : (fallbackIngredients && !isCJK(fallbackIngredients) ? fallbackIngredients : '')
     setRe({
       category: detCat || product.category || '',
       labelTitle: product.labelTitle || product.name || '',
