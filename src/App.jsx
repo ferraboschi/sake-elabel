@@ -10,6 +10,7 @@ const LabelArchive = lazy(() => import('./components/LabelArchive'))
 const ContainerLabels = lazy(() => import('./components/ContainerLabels'))
 const Login = lazy(() => import('./components/Login'))
 const SupplierPortal = lazy(() => import('./components/SupplierPortal'))
+const ImporterManager = lazy(() => import('./components/ImporterManager'))
 
 const Loading = () => (
   <div style={{ padding: '60px', textAlign: 'center', color: '#888' }}>Caricamento...</div>
@@ -51,6 +52,11 @@ function App() {
         <Route path="/containers" element={
           <ProtectedRoute allowedRoles={['admin', 'partner']}>
             <ContainerLabels />
+          </ProtectedRoute>
+        } />
+        <Route path="/importers" element={
+          <ProtectedRoute allowedRoles={['admin', 'partner']}>
+            <ImporterManager />
           </ProtectedRoute>
         } />
 

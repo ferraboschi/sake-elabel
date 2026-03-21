@@ -79,6 +79,12 @@ const Dashboard = () => {
       action: () => navigate('/archive'),
     },
     {
+      icon: '🌍',
+      title: 'Importatori',
+      desc: 'Gestisci importatori per paese: nome, indirizzo, lingua. Collegati automaticamente alle etichette.',
+      action: () => navigate('/importers'),
+    },
+    {
       icon: '🍶',
       title: '栄養成分 Nutritional Data',
       desc: '蔵元向け栄養成分入力ポータル · Portale fornitori per inserire i valori nutrizionali dei prodotti.',
