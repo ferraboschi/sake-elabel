@@ -11,31 +11,31 @@ function getIconPath(materialCode) {
   const code = materialCode.toUpperCase().replace(/\s+/g, '')
 
   // Glass codes
-  if (code === 'GL70') return '/sake-elabel/icons/gl70.png'
-  if (code === 'GL71') return '/sake-elabel/icons/gl71.png'
-  if (code === 'GL72') return '/sake-elabel/icons/gl72.png'
+  if (code === 'GL70') return '/icons/gl70.png'
+  if (code === 'GL71') return '/icons/gl71.png'
+  if (code === 'GL72') return '/icons/gl72.png'
 
   // Aluminum cap (composite aluminum)
-  if (code === 'C/ALU90' || code === 'CALU90' || code === 'C/ALU') return '/sake-elabel/icons/calu90.png'
+  if (code === 'C/ALU90' || code === 'CALU90' || code === 'C/ALU') return '/icons/calu90.png'
   // Pure aluminum
-  if (code === 'ALU' || code === 'ALU41') return '/sake-elabel/icons/alu41.png'
+  if (code === 'ALU' || code === 'ALU41') return '/icons/alu41.png'
 
   // Paper / Cardboard
-  if (code === 'PAP20' || code === '20') return '/sake-elabel/icons/pap20.png'
-  if (code === 'PAP22' || code === '22') return '/sake-elabel/icons/pap22.png'
+  if (code === 'PAP20' || code === '20') return '/icons/pap20.png'
+  if (code === 'PAP22' || code === '22') return '/icons/pap22.png'
 
   // Plastic / PVC
-  if (code === 'PVC' || code === 'PVC3' || code === '3') return '/sake-elabel/icons/pvc03.png'
+  if (code === 'PVC' || code === 'PVC3' || code === '3') return '/icons/pvc03.png'
 
   // Cork
-  if (code === 'C/CORK' || code === 'FOR51') return '/sake-elabel/icons/for51.png'
+  if (code === 'C/CORK' || code === 'FOR51') return '/icons/for51.png'
 
   // Fallback: try to match GL codes with space
   if (code.startsWith('GL')) {
     const num = code.replace('GL', '')
-    if (num === '70') return '/sake-elabel/icons/gl70.png'
-    if (num === '71') return '/sake-elabel/icons/gl71.png'
-    if (num === '72') return '/sake-elabel/icons/gl72.png'
+    if (num === '70') return '/icons/gl70.png'
+    if (num === '71') return '/icons/gl71.png'
+    if (num === '72') return '/icons/gl72.png'
   }
 
   return null

@@ -7,6 +7,9 @@ import { fetchProducts } from '../services/airtable'
 import { fetchShopifyProducts, matchProducts } from '../services/shopify'
 import DisposalIcon from './DisposalIcon'
 import NutritionTable from './NutritionTable'
+import shopifyPhotos from '../data/shopifyPhotos.json'
+import { detectDetailedCategory } from '../services/categoryDetector'
+import { translateIngredients } from '../services/ingredientTranslator'
 
 /**
  * Parse packagingMaterials string (e.g. "Vetro trasparente GL 72, Tappo alluminio C/ALU 90")
@@ -164,16 +167,27 @@ const ELabel = () => {
             const first = variants[0]
             const packaging = parsePackagingMaterials(first.packagingMaterials)
 
+            // Look up Shopify data for product_type and photo
+            const shopifyMatch = (() => {
+              for (const v of variants) {
+                const codeKey = (v.code || '').toUpperCase()
+                const barcodeKey = v.barcode || ''
+                const match = (codeKey && shopifyPhotos[codeKey]) || (barcodeKey && shopifyPhotos[barcodeKey])
+                if (match) return match
+              }
+              return null
+            })()
+
             const productData = {
               name: first.name,
               nameJp: first.nameJp,
               winery: first.winery,
               wineryJp: first.wineryJp,
-              category: first.category,
-              grapeVariety: first.category, // Product Type serves as category
+              category: detectDetailedCategory(first.name, first.category, shopifyMatch?.product_type || ''),
+              grapeVariety: first.category,
               countryOfOrigin: first.countryOfOrigin || 'Japan',
               alcoholPct: first.alcoholPct,
-              photo: null,
+              photo: shopifyMatch?.photo || null,
               sizes: variants
                 .filter(v => v.volumeMl)
                 .sort((a, b) => (b.volumeMl || 0) - (a.volumeMl || 0))
@@ -421,22 +435,41 @@ const ELabel = () => {
       {hasNutrition && <NutritionTable nutrition={product.nutrition} />}
 
       {/* Ingredients Section */}
-      {hasIngredients && (
-        <div className="ingredients-section">
-          <h2>{t('ingredients')}</h2>
-          <div className="ingredients-list">
-            {product.ingredients[selectedLanguage] || product.ingredients['it'] || ''}
-          </div>
-          {(product.allergens[selectedLanguage] || product.allergens['it']) && (
-            <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid #ddd' }}>
-              <strong>{t('contains')}:</strong>{' '}
-              <span className="allergens-highlight">
-                {product.allergens[selectedLanguage] || product.allergens['it']}
-              </span>
+      {hasIngredients && (() => {
+        // Find best ingredient text: try selected language, then any available
+        const rawText = product.ingredients[selectedLanguage]
+          || product.ingredients['it']
+          || Object.values(product.ingredients).find(v => v && v.trim())
+          || ''
+        // Auto-translate if the raw text is in a different language
+        const { text: translatedText } = translateIngredients(rawText, selectedLanguage)
+        const displayIngredients = translatedText || rawText
+
+        // Same for allergens
+        const rawAllergens = product.allergens[selectedLanguage]
+          || product.allergens['it']
+          || Object.values(product.allergens).find(v => v && v.trim())
+          || ''
+        const { text: translatedAllergens } = translateIngredients(rawAllergens, selectedLanguage)
+        const displayAllergens = translatedAllergens || rawAllergens
+
+        return (
+          <div className="ingredients-section">
+            <h2>{t('ingredients')}</h2>
+            <div className="ingredients-list">
+              {displayIngredients}
             </div>
-          )}
-        </div>
-      )}
+            {displayAllergens && (
+              <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid #ddd' }}>
+                <strong>{t('contains')}:</strong>{' '}
+                <span className="allergens-highlight">
+                  {displayAllergens}
+                </span>
+              </div>
+            )}
+          </div>
+        )
+      })()}
 
       {/* Disposal Section */}
       {product.bottleMaterialCode && (
@@ -472,6 +505,11 @@ const ELabel = () => {
           </div>
         </div>
       )}
+
+      {/* QR Nutrition Info */}
+      <div className="qr-nutrition-info">
+        <p>{t('qrNutritionInfo')}</p>
+      </div>
 
       {/* Warnings Section */}
       <div className="warnings-section">

@@ -99,5 +99,7 @@
   "warnings": "Hinweise",
   "pregnancyWarning": "In Schwangerschaft und Stillzeit nicht empfohlen.",
   "minorWarning": "Verkauf an Minderjährige unter 18 Jahren verboten.",
-  "storageWarning": "Kühl und trocken lagern, vor Licht schützen."
+  "storageWarning": "Kühl und trocken lagern, vor Licht schützen.",
+  "qrNutritionInfo": "Die Nährwertangaben sind über den QR-Code auf dem Etikett verfügbar.",
+  "qrNutritionTitle": "Nährwertinformationen"
 }

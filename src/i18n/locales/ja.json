@@ -99,5 +99,7 @@
   "warnings": "注意事項",
   "pregnancyWarning": "妊娠中・授乳中の方にはお勧めしません。",
   "minorWarning": "18歳未満の方への販売は禁止されています。",
-  "storageWarning": "直射日光を避け、涼しく乾燥した場所に保管してください。"
+  "storageWarning": "直射日光を避け、涼しく乾燥した場所に保管してください。",
+  "qrNutritionInfo": "栄養成分表示はラベルのQRコードからご確認いただけます。",
+  "qrNutritionTitle": "栄養成分情報"
 }

@@ -31,6 +31,7 @@ const FIELDS = {
   alcoholPct:     { id: 'fldDiAiLpFA3hDB47', name: 'Alcohol %' },
   barcode:        { id: 'fldrfLFNtDm2X3jr7', name: 'Barcode' },
   ean:            { id: 'fld876oau4wUHNttm', name: 'codice EAN' },
+  eanBox:         { id: 'fldisS1FwBanCDzyB', name: 'EAN_Box' },
   status:         { id: 'fldRZZ7iE8itpkWwE', name: 'Status' },
   bottlesPerBox:  { id: 'fldJ3LcJlF2NsSS1J', name: 'Bottles per box' },
 
@@ -58,6 +59,9 @@ const FIELDS = {
   allergensDe:    { id: 'fldEOMFWxbQSf2CkK', name: 'Allergens_DE' },
   allergensEs:    { id: 'fldInUdH7hm7dgYlW', name: 'Allergens_ES' },
 
+  // === Sales regions (export authorization) ===
+  salesRegion:        { id: 'fldRmnpjK6KQSVwTZ', name: 'SC sales region' },
+
   // === Sake-specific fields ===
   seimaibuai:         { id: 'fldCcsaPU02WicBz6', name: 'Seimaibuai' },
 
@@ -66,6 +70,9 @@ const FIELDS = {
   operatorName:       { id: 'fldE2830YVz8gJebH', name: 'Operator_Name' },
   operatorAddress:    { id: 'fldDUVlq6pTbqSyQd', name: 'Operator_Address' },
   countryOfOrigin:    { id: 'fldJ2RyG8K0Xm6d3F', name: 'Country_of_Origin' },
+
+  // === Legal description (custom denomination for label) ===
+  legalDescription:   { id: 'fldwiR0TCKQJWH3x1', name: 'Legal_Description' },
 
   // === E-Label status ===
   elabelStatus:       { id: 'fld8JHbfh7z3awZ2x', name: 'ELabel_Status' },
@@ -215,6 +222,94 @@ export const batchUpdateProducts = async (records) => {
 }
 
 /**
+ * Parse packagingMaterials string into bottleColor, bottleMaterialCode, capType, capMaterialCode
+ * Expected format: "Bottiglia: Nero GL 72; Tappo: Alluminio C/ALU 90"
+ * Also handles legacy format: "Vetro marrone GL 72, Tappo alluminio C/ALU 90"
+ */
+function parsePackagingToFields(materialsStr) {
+  const result = {
+    bottleColor: null,
+    bottleMaterialCode: null,
+    capType: null,
+    capMaterialCode: null,
+  }
+  if (!materialsStr) return result
+
+  // Color mapping (Italian → internal)
+  const colorMap = {
+    'trasparente': 'Trasparente', 'chiaro': 'Trasparente', 'clear': 'Trasparente', 'bianco': 'Trasparente',
+    'verde': 'Verde', 'green': 'Verde',
+    'marrone': 'Marrone', 'brown': 'Marrone', 'ambra': 'Marrone', 'amber': 'Marrone',
+    'nero': 'Nera', 'nera': 'Nera', 'black': 'Nera', 'scuro': 'Nera', 'dark': 'Nera',
+  }
+
+  // New structured format: "Bottiglia: Color GLxx; Tappo: Type C/ALU xx"
+  const bottleMatch = materialsStr.match(/Bottiglia:\s*([^;]+)/i)
+  const capMatch = materialsStr.match(/Tappo:\s*(.+)/i)
+
+  if (bottleMatch) {
+    const bottlePart = bottleMatch[1].trim()
+    const glCode = bottlePart.match(/GL\s*\d+/i)
+    if (glCode) result.bottleMaterialCode = glCode[0].toUpperCase().replace(/GL(\d)/, 'GL $1')
+    // Extract color (everything before GL code)
+    const colorPart = glCode ? bottlePart.slice(0, bottlePart.indexOf(glCode[0])).trim() : bottlePart
+    if (colorPart) {
+      const lower = colorPart.toLowerCase()
+      result.bottleColor = colorMap[lower] || colorPart
+    }
+  }
+
+  if (capMatch) {
+    const capPart = capMatch[1].trim()
+    const aluCode = capPart.match(/C\/ALU\s*\d+/i)
+    if (aluCode) result.capMaterialCode = aluCode[0].toUpperCase().replace(/C\/ALU(\d)/, 'C/ALU $1')
+    else result.capMaterialCode = 'C/ALU 90'
+    // Extract cap type (everything before code)
+    const typePart = aluCode ? capPart.slice(0, capPart.indexOf(aluCode[0])).trim() : capPart
+    if (typePart) result.capType = typePart
+  }
+
+  // Legacy format fallback: "Vetro [color] GL xx, Tappo [type] C/ALU xx"
+  if (!bottleMatch && !capMatch) {
+    const parts = materialsStr.split(',').map(s => s.trim())
+    for (const part of parts) {
+      const lower = part.toLowerCase()
+      if (lower.includes('vetro') || lower.includes('glass') || lower.includes('gl ')) {
+        const glCode = part.match(/GL\s*\d+/i)
+        if (glCode) result.bottleMaterialCode = glCode[0].toUpperCase().replace(/GL(\d)/, 'GL $1')
+        // Try to extract color from text
+        for (const [keyword, color] of Object.entries(colorMap)) {
+          if (lower.includes(keyword)) { result.bottleColor = color; break }
+        }
+      }
+      if (lower.includes('tappo') || lower.includes('cap') || lower.includes('alu')) {
+        const aluCode = part.match(/C\/ALU\s*\d+/i)
+        result.capMaterialCode = aluCode ? aluCode[0].toUpperCase() : 'C/ALU 90'
+        if (lower.includes('alluminio') || lower.includes('aluminum')) result.capType = 'Alluminio'
+        else if (lower.includes('sughero') || lower.includes('cork')) result.capType = 'Sughero'
+      }
+    }
+  }
+
+  return result
+}
+
+/**
+ * Compose a packagingMaterials string from individual fields
+ * Format: "Bottiglia: Color GLxx; Tappo: Type C/ALU xx"
+ */
+export const composePackagingMaterials = (bottleColor, bottleMaterialCode, capType, capMaterialCode) => {
+  const parts = []
+  if (bottleMaterialCode) {
+    parts.push(`Bottiglia: ${bottleColor || 'Trasparente'} ${bottleMaterialCode}`)
+  }
+  if (capMaterialCode) {
+    parts.push(`Tappo: ${capType || 'Alluminio'} ${capMaterialCode}`)
+  }
+  return parts.join('; ')
+}
+
+/**
  * Normalize an Airtable record into our app's product format
  * Airtable REST API returns fields by name, not by ID
  */
@@ -255,6 +350,10 @@ function normalizeRecord(record) {
   const barcodeEan = get('ean')
   const barcode = barcodeText || (barcodeEan ? String(barcodeEan) : '')
 
+  // EAN Box barcode
+  const eanBoxRaw = get('eanBox')
+  const barcodeBox = eanBoxRaw ? String(eanBoxRaw) : ''
+
   return {
     _recordId: record.id,
     code,
@@ -267,6 +366,7 @@ function normalizeRecord(record) {
     volumeMl: get('size') || null,
     alcoholPct: alcoholPct ? parseFloat(alcoholPct.toFixed(1)) : null,
     barcode,
+    barcodeBox,
     bottlesPerBox: get('bottlesPerBox') || null,
     status: getSelect('status') || '',
 
@@ -303,11 +403,16 @@ function normalizeRecord(record) {
     // Sake-specific
     seimaibuai: get('seimaibuai') || null,
 
+    // Sales regions — array of country codes where product can be sold (e.g. ['ITA', 'ESP', 'DEU'])
+    salesRegion: get('salesRegion') || [],
+
     // Packaging & Operator
     packagingMaterials: get('packagingMaterials') || '',
+    ...parsePackagingToFields(get('packagingMaterials') || ''),
     operatorName: get('operatorName') || '',
     operatorAddress: get('operatorAddress') || '',
     countryOfOrigin: get('countryOfOrigin') || '',
+    legalDescription: get('legalDescription') || '',
 
     // E-Label status
     elabelStatus: getSelect('elabelStatus') || '',
@@ -323,4 +428,5 @@ export default {
   fetchProduct,
   updateProduct,
   batchUpdateProducts,
+  composePackagingMaterials,
 }

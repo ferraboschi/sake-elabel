@@ -75,6 +75,7 @@ export const saveLabels = (labels) => {
     bottleMaterialCode: label.bottleMaterialCode || '',
     capMaterialCode: label.capMaterialCode || '',
     seimaibuai: label.seimaibuai || null,
+    barcode: label.barcode || '',
   }))
 
   // Build set of new label keys for deduplication

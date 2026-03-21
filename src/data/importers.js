@@ -43,6 +43,36 @@ export const defaultImporters = {
   }
 }
 
+// All known sales region codes → display name + default language
+export const REGION_CODE_LABELS = {
+  ITA: { label: 'Italia',       lang: 'it' },
+  DEU: { label: 'Deutschland',  lang: 'de' },
+  FRA: { label: 'France',       lang: 'fr' },
+  ESP: { label: 'España',       lang: 'es' },
+  CHE: { label: 'Svizzera',     lang: 'it' },
+  LUX: { label: 'Lussemburgo',  lang: 'fr' },
+  NLD: { label: 'Paesi Bassi',  lang: 'it' },
+  AUT: { label: 'Austria',      lang: 'de' },
+  GBR: { label: 'Regno Unito',  lang: 'it' },
+  BEL: { label: 'Belgio',       lang: 'fr' },
+  ALB: { label: 'Albania',      lang: 'it' },
+}
+
+// Map region code → importer country key (which default importer to suggest)
+export const REGION_CODE_TO_IMPORTER_COUNTRY = {
+  ITA: 'Italia',
+  DEU: 'Deutschland',
+  FRA: 'France',
+  ESP: 'España',
+  CHE: 'Italia',
+  LUX: 'Italia',
+  NLD: 'Italia',
+  AUT: 'Deutschland',
+  GBR: 'Italia',
+  BEL: 'Italia',
+  ALB: 'Italia',
+}
+
 // Legacy aliases
 export const importers = defaultImporters
 
@@ -70,6 +100,16 @@ export const addCustomImporter = (importer) => {
 }
 
 /**
+ * Update a custom importer by ID
+ */
+export const updateCustomImporter = (id, updates) => {
+  const custom = getCustomImporters().map(i =>
+    i.id === id ? { ...i, ...updates } : i
+  )
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(custom))
+}
+
+/**
  * Delete a custom importer by ID
  */
 export const removeCustomImporter = (id) => {
@@ -78,7 +118,29 @@ export const removeCustomImporter = (id) => {
 }
 
 /**
- * Get all importers for a given country (built-in + custom)
+ * Get all importers for a given region code (built-in from mapped country + custom for this region)
+ */
+export const getImportersForRegion = (regionCode) => {
+  const result = []
+  // Get default importer from mapped country
+  const importerCountry = REGION_CODE_TO_IMPORTER_COUNTRY[regionCode]
+  if (importerCountry) {
+    const builtIn = defaultImporters[importerCountry]
+    if (builtIn && builtIn.name) {
+      result.push(builtIn)
+    }
+  }
+  // Get custom importers saved for this specific region
+  const regionLabel = REGION_CODE_LABELS[regionCode]?.label || regionCode
+  const custom = getCustomImporters().filter(i =>
+    i.regionCode === regionCode || i.country === regionLabel || i.country === (REGION_CODE_TO_IMPORTER_COUNTRY[regionCode] || '')
+  )
+  result.push(...custom)
+  return result
+}
+
+/**
+ * Get all importers for a given country name (built-in + custom) — legacy
  */
 export const getImportersForCountry = (country) => {
   const result = []

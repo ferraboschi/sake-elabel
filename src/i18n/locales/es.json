@@ -99,5 +99,7 @@
   "warnings": "Advertencias",
   "pregnancyWarning": "No recomendado durante el embarazo y la lactancia.",
   "minorWarning": "Prohibida la venta a menores de 18 años.",
-  "storageWarning": "Conservar en lugar fresco y seco, protegido de la luz."
+  "storageWarning": "Conservar en lugar fresco y seco, protegido de la luz.",
+  "qrNutritionInfo": "La información nutricional está disponible a través del código QR en la etiqueta.",
+  "qrNutritionTitle": "Información Nutricional"
 }

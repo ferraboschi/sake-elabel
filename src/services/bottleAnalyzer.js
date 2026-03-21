@@ -69,9 +69,9 @@ function sampleBottleColors(img) {
   for (let y = startY; y < endY; y += 3) {
     for (let x = centerX - stripWidth; x < centerX + stripWidth; x += 3) {
       const pixel = ctx.getImageData(x, y, 1, 1).data
-      // Skip white/near-white (background) and very dark pixels (shadows)
+      // Skip white/near-white (background) but KEEP dark pixels (they matter for black bottles)
       const brightness = (pixel[0] + pixel[1] + pixel[2]) / 3
-      if (brightness > 30 && brightness < 240) {
+      if (brightness > 8 && brightness < 240) {
         colors.push([pixel[0], pixel[1], pixel[2]])
       }
     }
@@ -125,10 +125,16 @@ function classifyBottleColor(colors) {
   const brownPct = brownCount / total
   const darkPct = darkCount / total
 
-  // Decision logic
+  // Decision logic — check dark first to avoid misclassifying black bottles as green
   let bottleColor, materialCode, confidence
 
-  if (greenPct > 0.25 || (greenPct > brownPct && greenPct > clearPct && greenPct > 0.15)) {
+  if (darkPct > 0.35) {
+    // Dark/black bottle — per EU standards, black glass = GL 72 (brown glass category)
+    bottleColor = 'Nera'
+    materialCode = 'GL 72'
+    confidence = Math.min(0.95, darkPct + 0.2)
+  } else if (greenPct > 0.30 && greenPct > brownPct * 1.5 && greenPct > darkPct) {
+    // Clearly green — require stronger signal to avoid dark-bottle false positives
     bottleColor = 'Verde'
     materialCode = 'GL 71'
     confidence = Math.min(0.95, greenPct + 0.3)
@@ -140,8 +146,8 @@ function classifyBottleColor(colors) {
     bottleColor = 'Trasparente'
     materialCode = 'GL 70'
     confidence = Math.min(0.95, clearPct + 0.2)
-  } else if (darkPct > 0.5) {
-    // Very dark bottle - likely brown or black glass
+  } else if (darkPct > greenPct && darkPct > 0.15) {
+    // Moderately dark — still likely a dark bottle
     bottleColor = 'Nera'
     materialCode = 'GL 72'
     confidence = 0.5

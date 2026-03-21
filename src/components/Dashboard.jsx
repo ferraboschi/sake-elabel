@@ -33,7 +33,23 @@ const Dashboard = () => {
             </button>
           </div>
 
-          <p style={{ color: '#bbb', fontSize: '12px', marginTop: '40px', textAlign: 'center' }}>
+          {/* Supplier portal link for Japanese producers */}
+          <div style={{
+            marginTop: '32px', padding: '16px 20px', borderRadius: '10px',
+            background: '#f5f5f5', border: '1px solid #e0e0e0', textAlign: 'center',
+          }}>
+            <p style={{ fontSize: '14px', color: '#555', margin: '0 0 8px' }}>
+              🍶 蔵元の皆様へ · Per i produttori
+            </p>
+            <a
+              href="/nutrition?t=sake2026supplier"
+              style={{ fontSize: '14px', color: '#1565c0', fontWeight: 600, textDecoration: 'none' }}
+            >
+              栄養成分入力ポータル → Nutritional Data Portal
+            </a>
+          </div>
+
+          <p style={{ color: '#bbb', fontSize: '12px', marginTop: '24px', textAlign: 'center' }}>
             Conforme Reg. UE 2021/2117 · Nessun tracciamento · Nessuna pubblicità
           </p>
         </div>
@@ -51,10 +67,22 @@ const Dashboard = () => {
       primary: true,
     },
     {
+      icon: '🚢',
+      title: 'Etichette per Container',
+      desc: 'Leggi la lista prodotti da Dropbox, genera QR code per ogni spedizione.',
+      action: () => navigate('/containers'),
+    },
+    {
       icon: '📦',
-      title: 'Etichette',
+      title: 'Archivio Etichette',
       desc: 'Consulta lo storico delle etichette generate, scarica retro etichette e QR.',
       action: () => navigate('/archive'),
+    },
+    {
+      icon: '🍶',
+      title: '栄養成分 Nutritional Data',
+      desc: '蔵元向け栄養成分入力ポータル · Portale fornitori per inserire i valori nutrizionali dei prodotti.',
+      action: () => navigate('/nutrition?t=sake2026supplier'),
     },
   ]
 
