@@ -312,7 +312,10 @@ const AdminPanel = () => {
   // Check readiness for single product being edited or reprintable products
   const getEditingReadiness = (product) => {
     const missing = []
-    if (!product.ingredients?.[selectedLanguage]) missing.push('Ingredienti')
+    const re = reviewEdits[product.slug] || {}
+    // Check review field first (user input), then product data from Airtable
+    const hasIngredients = re.ingredients?.trim() || product.ingredients?.[selectedLanguage]
+    if (!hasIngredients) missing.push('Ingredienti')
     return { ready: missing.length === 0, missing }
   }
 
