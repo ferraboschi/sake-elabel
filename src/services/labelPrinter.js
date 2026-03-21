@@ -374,12 +374,12 @@ export const generateLabelPDF = async (label, options = {}) => {
   const fWarnW = W - M - fWarnX
 
   tmp.setFontSize(F.warn)
-  let warnH = 0.5 + TH.warnH - BL.warnH  // header shifted up to align with QR top
+  let warnH = 0.5 + TH.warnH  // gap to avvertenze header bottom
   warnings.forEach(w => {
     warnH += tmp.splitTextToSize(w, fWarnW).length * WARN_LS
   })
   warnH += WARN_LS * 0.3 + WARN_LS  // qrNutrition line
-  const qrColH = QR_SIZE + 2.0  // space for QR/BOX icon + bottom row
+  const qrColH = QR_SIZE + 2.0  // space for QR + bottom row
   const footerH = Math.max(qrColH, warnH)
   cy += footerH
   cy += TH.body  // bottom row (Cod. + Lotto)
@@ -604,9 +604,8 @@ export const generateLabelPDF = async (label, options = {}) => {
     doc.text('QR CODE', OX + M + 4, qrY + 8)
   }
 
-  // Avvertenze — cap top of "A" aligned with QR top edge
-  // Shift entire block up by BL.warnH so header aligns with QR top
-  let wy = qrY - BL.warnH
+  // Avvertenze (aligned with QR top)
+  let wy = qrY
   hFont(F.warnHeader, 'bold')
   doc.text(t.warn + ':', wX, wy + BL.warnH)
   wy += TH.warnH + (WARN_LS - TH.warn)
