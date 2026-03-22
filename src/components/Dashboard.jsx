@@ -7,6 +7,7 @@ import { getLabels, getLabelStats } from '../services/labelStore'
 import { batchCheckReprint } from '../services/printSnapshot'
 import { getAllImporters, getCustomImporters, REGION_CODE_LABELS, REGION_CODE_TO_IMPORTER_COUNTRY, defaultImporters } from '../data/importers'
 import { useGenerateLabel } from '../hooks/useGenerateLabel'
+import { autoFillIngredients } from '../services/ingredientTranslator'
 
 const Dashboard = () => {
   const { t } = useTranslation()
@@ -216,8 +217,15 @@ const Dashboard = () => {
         if (countryImp) importer = { name: countryImp.name, address: countryImp.address || '' }
       }
 
+      // Auto-fill ingredient translations (dashboard skips the ProductEditor flow)
+      const filledProduct = {
+        ...fullProduct,
+        ingredients: autoFillIngredients(fullProduct.ingredients),
+        allergens: autoFillIngredients(fullProduct.allergens),
+      }
+
       // Generate the label (this downloads PDFs + saves snapshot)
-      await generate([fullProduct], {
+      await generate([filledProduct], {
         selectedLanguage,
         selectedCountry,
         importer,

@@ -475,10 +475,7 @@ export const generateLabelPDF = async (rawLabel, options = {}) => {
   if (label.category) {
     doc.setTextColor(100)
     hFont(F.subtitle, 'italic')
-    const catText = label.seimaibuai
-      ? `${label.category}  ·  ${label.seimaibuai}%`
-      : label.category
-    txt(catText, BL.body)
+    txt(label.category, BL.body)
     y += TH.body
     doc.setTextColor(0)
   }
@@ -504,7 +501,10 @@ export const generateLabelPDF = async (rawLabel, options = {}) => {
     y += TH.ingH
 
     y += 0.1
-    hFont(F.body, 'normal')
+    // Use JP font if ingredients contain CJK characters
+    const hasCJK = /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]/.test(ingText)
+    if (hasCJK && hasJpFont) jpFontSet(F.body)
+    else hFont(F.body, 'normal')
     const ingR = doc.splitTextToSize(ingText, CW_BC)
     txt(ingR, BL.body)
     y += TH.body
@@ -514,7 +514,9 @@ export const generateLabelPDF = async (rawLabel, options = {}) => {
   // Allergens
   if (algText) {
     y += BODY_LS - TH.body
-    hFont(F.body, 'bold')
+    const algHasCJK = /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]/.test(algText)
+    if (algHasCJK && hasJpFont) jpFontSet(F.body)
+    else hFont(F.body, 'bold')
     const algLine = t.alg + ': ' + algText.toUpperCase()
     const algR = doc.splitTextToSize(algLine, CW_BC)
     txt(algR, BL.body)
