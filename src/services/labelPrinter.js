@@ -168,7 +168,7 @@ const TRANSLATIONS = {
     lot: 'Lotto: vedi sulla confezione',
     code: 'Cod.',
     website: 'sakecompany.com',
-    qrNutrition: 'Indicazioni nutrizionali nel QR',
+    qrNutrition: 'Info nutrizionali nel QR',
   },
   de: {
     desc: 'Fermentiertes alkoholisches Reisgetränk (SAKE)',
@@ -182,7 +182,7 @@ const TRANSLATIONS = {
     lot: 'Los: siehe Verpackung',
     code: 'Art.-Nr.',
     website: 'sakecompany.com',
-    qrNutrition: 'Nährwertangaben im QR-Code',
+    qrNutrition: 'Nährwertangaben im QR',
   },
   fr: {
     desc: 'Boisson alcoolique fermentée de riz (SAKE)',
@@ -196,7 +196,7 @@ const TRANSLATIONS = {
     lot: 'Lot : voir emballage',
     code: 'Réf.',
     website: 'sakecompany.com',
-    qrNutrition: 'Informations nutritionnelles dans le QR',
+    qrNutrition: 'Info nutritionnelles dans le QR',
   },
   es: {
     desc: 'Bebida alcohólica fermentada de arroz (SAKE)',
@@ -210,7 +210,7 @@ const TRANSLATIONS = {
     lot: 'Lote: ver envase',
     code: 'Cód.',
     website: 'sakecompany.com',
-    qrNutrition: 'Información nutricional en el QR',
+    qrNutrition: 'Info nutricional en el QR',
   },
   ja: {
     desc: '日本酒',
@@ -648,16 +648,22 @@ export const generateLabelPDF = async (rawLabel, options = {}) => {
     wy += wR.length * WARN_LS
   })
 
-  // QR nutrition info text (inside Avvertenze column)
+  // QR nutrition info text (inside Avvertenze column) — single line, no wrap
   if (t.qrNutrition) {
     wy += WARN_LS * 0.3
     hFont(F.warn, 'normal')
-    doc.text(t.qrNutrition, wX, wy + BL.warn)
+    // Force single line: truncate if wider than available width
+    let nutText = t.qrNutrition
+    while (doc.getTextWidth(nutText) > wW && nutText.length > 10) {
+      nutText = nutText.slice(0, -2) + '…'
+    }
+    doc.text(nutText, wX, wy + BL.warn)
     wy += WARN_LS
   }
 
   // --- Bottom row: Cod. left (under QR) + Lotto right ---
-  const bottomRowY = qrY + QR_SIZE + 2.0
+  // Use the maximum of QR bottom and warnings bottom to prevent overlap
+  const bottomRowY = Math.max(qrY + QR_SIZE + 2.0, wy + 1.0)
   hFont(F.cod, 'normal')
   doc.setTextColor(0)
   doc.text(`${t.code} ${label.code || ''}`, OX + M, bottomRowY)
