@@ -153,7 +153,7 @@ const SEP_R = 190, SEP_G = 192, SEP_B = 194  // line color
 // LAYOUT — from design PDF
 // ============================================================
 const PITTO_SIZE = 6.1     // pittogramma icon 6.1×6.1mm
-const QR_SIZE = 15         // QR code 15×15mm
+const QR_SIZE = 13         // QR code 13×13mm (EU minimum compliant)
 
 const TRANSLATIONS = {
   it: {
@@ -401,10 +401,9 @@ export const generateLabelPDF = async (rawLabel, options = {}) => {
   const fWarnX = M + QR_SIZE + 2.5
   const fWarnW = W - M - fWarnX
 
-  tmp.setFontSize(F.warn)
   let warnH = 0.5 + TH.warnH  // gap to avvertenze header bottom
-  warnings.forEach(w => {
-    warnH += tmp.splitTextToSize(w, fWarnW).length * WARN_LS
+  warnings.forEach(() => {
+    warnH += WARN_LS  // each warning = exactly 1 line (auto-fit enforced in render)
   })
   warnH += WARN_LS * 0.3 + WARN_LS  // qrNutrition line
   const qrColH = QR_SIZE + 2.0  // space for QR + bottom row
@@ -641,23 +640,29 @@ export const generateLabelPDF = async (rawLabel, options = {}) => {
   doc.text(t.warn + ':', wX, wy + BL.warnH)
   wy += TH.warnH + (WARN_LS - TH.warn)
 
-  hFont(F.warn, 'normal')
+  // Each warning MUST fit on a single line — auto-reduce font if needed
   warnings.forEach(warn => {
-    const wR = doc.splitTextToSize(warn, wW)
-    doc.text(wR, wX, wy + BL.warn)
-    wy += wR.length * WARN_LS
+    let fs = F.warn  // start at 5.5pt
+    hFont(fs, 'normal')
+    // Shrink until text fits in one line (min 4.5pt for legibility)
+    while (doc.splitTextToSize(warn, wW).length > 1 && fs > 4.5) {
+      fs -= 0.25
+      hFont(fs, 'normal')
+    }
+    doc.text(warn, wX, wy + BL.warn)
+    wy += WARN_LS
   })
 
-  // QR nutrition info text (inside Avvertenze column) — single line, no wrap
+  // QR nutrition info text — single line, auto-fit
   if (t.qrNutrition) {
     wy += WARN_LS * 0.3
-    hFont(F.warn, 'normal')
-    // Force single line: truncate if wider than available width
-    let nutText = t.qrNutrition
-    while (doc.getTextWidth(nutText) > wW && nutText.length > 10) {
-      nutText = nutText.slice(0, -2) + '…'
+    let fs = F.warn
+    hFont(fs, 'normal')
+    while (doc.splitTextToSize(t.qrNutrition, wW).length > 1 && fs > 4.5) {
+      fs -= 0.25
+      hFont(fs, 'normal')
     }
-    doc.text(nutText, wX, wy + BL.warn)
+    doc.text(t.qrNutrition, wX, wy + BL.warn)
     wy += WARN_LS
   }
 
