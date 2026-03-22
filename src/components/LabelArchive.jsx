@@ -214,6 +214,9 @@ const LabelArchive = () => {
                         <a href={label.labelUrl} target="_blank" rel="noopener noreferrer" style={s.dlBtnLink} title="Pagina e-label">
                           E-LABEL
                         </a>
+                        <button onClick={() => navigate(`/admin/product/${label.productSlug}`)} style={s.dlBtnEdit} title="Modifica prodotto">
+                          EDIT
+                        </button>
                       </div>
 
                       {/* Delete */}
@@ -272,6 +275,11 @@ const s = {
     padding: '3px 7px', fontSize: '10px', fontWeight: 700, cursor: 'pointer',
     border: '1px solid #635bff', borderRadius: '4px', background: '#fff', color: '#635bff',
     textDecoration: 'none', display: 'inline-block', letterSpacing: '0.3px',
+  },
+  dlBtnEdit: {
+    padding: '3px 7px', fontSize: '10px', fontWeight: 700, cursor: 'pointer',
+    border: '1px solid #f59e0b', borderRadius: '4px', background: '#fffbeb', color: '#b45309',
+    letterSpacing: '0.3px',
   },
   btnPrimary: {
     background: '#635bff', color: '#fff', border: 'none', borderRadius: '8px',
