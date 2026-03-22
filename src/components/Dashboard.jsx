@@ -41,18 +41,31 @@ const Dashboard = () => {
       // Check reprint status for all products
       const reprintStatus = await batchCheckReprint(products)
 
-      // Filter products that need reprint
+      // Filter products that need reprint + find their existing labels (languages)
+      const archiveLabels = getLabels()
       const reprintProducts = products
         .filter(p => reprintStatus[p.code || p._recordId]?.needsReprint)
         .map(p => {
           const key = p.code || p._recordId
           const printedAt = reprintStatus[key]?.printedAt
+          // Find all existing labels for this product (different languages/countries)
+          const existingForProduct = archiveLabels.filter(l =>
+            (l.productSlug === p.slug || l.slug === p.slug) ||
+            (l.productCode === p.code && p.code)
+          )
+          const languages = existingForProduct.map(l => ({
+            language: l.language,
+            country: l.country,
+            importerName: l.importerName || '',
+            importerAddress: l.importerAddress || '',
+          }))
           return {
             name: p.name,
             code: p.code,
             volumeMl: p.volumeMl,
             printedAt,
             slug: p.slug,
+            languages, // all language/country combos to regenerate
           }
         })
 
@@ -180,58 +193,41 @@ const Dashboard = () => {
     )
   }
 
-  // Regenerate a label directly from the dashboard
+  // Regenerate ALL labels for a product (all languages/countries)
   const handleRegenerate = async (reprintProduct) => {
     setRegeneratingSlug(reprintProduct.slug)
     try {
-      // Find the full product data
       const fullProduct = allProducts.find(p => p.slug === reprintProduct.slug)
       if (!fullProduct) {
         console.error('Product not found:', reprintProduct.slug)
         return
       }
 
-      // Find the existing label in archive to get language, country, importer
-      const existingLabels = getLabels()
-      const existingLabel = existingLabels.find(l =>
-        (l.productSlug === reprintProduct.slug || l.slug === reprintProduct.slug) ||
-        (l.productCode === reprintProduct.code && reprintProduct.code)
-      )
-
-      const selectedLanguage = existingLabel?.language || 'it'
-      const selectedCountry = existingLabel?.country || 'Italia'
-
-      // Reconstruct importer from stored flat fields
-      let importer = null
-      if (existingLabel?.importerName) {
-        importer = { name: existingLabel.importerName, address: existingLabel.importerAddress || '' }
-      } else {
-        // Fallback: find importer from importers config
-        const allImp = getAllImporters()
-        const countryImp = allImp.find(i => {
-          const impCountry = REGION_CODE_TO_IMPORTER_COUNTRY[Object.keys(REGION_CODE_TO_IMPORTER_COUNTRY).find(
-            rc => REGION_CODE_LABELS[rc] === selectedCountry
-          )]
-          return impCountry && (i.country === impCountry || i.regionCode)
-        })
-        if (countryImp) importer = { name: countryImp.name, address: countryImp.address || '' }
-      }
-
-      // Auto-fill ingredient translations (dashboard skips the ProductEditor flow)
+      // Auto-fill ingredient translations
       const filledProduct = {
         ...fullProduct,
         ingredients: autoFillIngredients(fullProduct.ingredients),
         allergens: autoFillIngredients(fullProduct.allergens),
       }
 
-      // Generate the label (this downloads PDFs + saves snapshot)
-      await generate([filledProduct], {
-        selectedLanguage,
-        selectedCountry,
-        importer,
-      })
+      // Regenerate for EACH language/country combo found in archive
+      const langs = reprintProduct.languages?.length > 0
+        ? reprintProduct.languages
+        : [{ language: 'it', country: 'Italia', importerName: '', importerAddress: '' }]
 
-      // Remove from the reprint list in state
+      for (const langInfo of langs) {
+        const importer = langInfo.importerName
+          ? { name: langInfo.importerName, address: langInfo.importerAddress || '' }
+          : null
+
+        await generate([filledProduct], {
+          selectedLanguage: langInfo.language,
+          selectedCountry: langInfo.country,
+          importer,
+        })
+      }
+
+      // Remove from the reprint list
       setStats(prev => ({
         ...prev,
         reprintProducts: prev.reprintProducts.filter(p => p.slug !== reprintProduct.slug),
@@ -348,11 +344,23 @@ const Dashboard = () => {
                     <div style={{ fontWeight: 600, color: '#222', marginBottom: '2px' }}>
                       {product.name}
                     </div>
-                    <div style={{ color: '#888', fontSize: '12px' }}>
+                    <div style={{ color: '#888', fontSize: '12px', display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
                       {product.code && <span>{product.code}</span>}
                       {product.volumeMl && <span> · {product.volumeMl} ml</span>}
                       {product.printedAt && (
                         <span> · Stampa: {new Date(product.printedAt).toLocaleDateString('it-IT')}</span>
+                      )}
+                      {product.languages?.length > 0 && (
+                        <span style={{ display: 'flex', gap: '3px', marginLeft: '4px' }}>
+                          {product.languages.map((li, idx) => (
+                            <span key={idx} style={{
+                              fontSize: '10px', fontWeight: 700, color: '#1565c0',
+                              background: '#e3f2fd', padding: '1px 5px', borderRadius: '3px',
+                            }}>
+                              {li.language?.toUpperCase()} · {li.country}
+                            </span>
+                          ))}
+                        </span>
                       )}
                     </div>
                   </div>

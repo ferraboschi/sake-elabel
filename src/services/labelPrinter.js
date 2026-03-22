@@ -403,11 +403,8 @@ export const generateLabelPDF = async (rawLabel, options = {}) => {
 
   tmp.setFontSize(F.warn)
   let warnH = 0.5 + TH.warnH  // gap to avvertenze header bottom
-  warnings.forEach(w => {
-    warnH += tmp.splitTextToSize(w, fWarnW).length * WARN_LS
-  })
-  warnH += WARN_LS * 0.3
-  warnH += tmp.splitTextToSize(t.qrNutrition || '', fWarnW).length * WARN_LS  // qrNutrition (may wrap)
+  const allWarnTextM = warnings.join(' ') + (t.qrNutrition ? ' ' + t.qrNutrition : '')
+  warnH += tmp.splitTextToSize(allWarnTextM, fWarnW).length * WARN_LS
   const qrColH = QR_SIZE + 2.0  // space for QR + bottom row
   const footerH = Math.max(qrColH, warnH)
   cy += footerH
@@ -642,21 +639,12 @@ export const generateLabelPDF = async (rawLabel, options = {}) => {
   doc.text(t.warn + ':', wX, wy + BL.warnH)
   wy += TH.warnH + (WARN_LS - TH.warn)
 
+  // All warnings + nutrition as one continuous text block
   hFont(F.warn, 'normal')
-  warnings.forEach(warn => {
-    const wR = doc.splitTextToSize(warn, wW)
-    doc.text(wR, wX, wy + BL.warn)
-    wy += wR.length * WARN_LS
-  })
-
-  // QR nutrition info text
-  if (t.qrNutrition) {
-    wy += WARN_LS * 0.3
-    hFont(F.warn, 'normal')
-    const nutR = doc.splitTextToSize(t.qrNutrition, wW)
-    doc.text(nutR, wX, wy + BL.warn)
-    wy += nutR.length * WARN_LS
-  }
+  const allWarnText = warnings.join(' ') + (t.qrNutrition ? ' ' + t.qrNutrition : '')
+  const warnLines = doc.splitTextToSize(allWarnText, wW)
+  doc.text(warnLines, wX, wy + BL.warn)
+  wy += warnLines.length * WARN_LS
 
   // --- Bottom row: Cod. left (under QR) + Lotto right ---
   // Use the maximum of QR bottom and warnings bottom to prevent overlap
