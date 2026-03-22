@@ -437,6 +437,7 @@ export const generateLabelPDF = async (label, options = {}) => {
 
   // --- Title: product name (adaptive size from Phase 1) ---
   y += 1.4  // margin to title top
+  doc.setTextColor(0)  // ensure black text for title
   hFont(titleStyle.pt, 'bold')
   const nameR = doc.splitTextToSize(titleText, titleAvailW)
   txt(nameR, titleStyle.bl)

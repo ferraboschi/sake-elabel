@@ -196,6 +196,27 @@ const ProductList = ({
                       ))}
                     </div>
                   )}
+                  {/* JP Ready badge */}
+                  {product.winery && (
+                    <div style={{ marginTop: '3px' }}>
+                      {(() => {
+                        const hasIngredients = product.ingredients?.it || product.ingredients?.en
+                        const hasAlcohol = product.alcoholPct
+                        const hasEnergy = product.nutrition?.energy_kcal
+                        const isReady = hasIngredients && hasAlcohol && hasEnergy
+                        return (
+                          <span style={{
+                            fontSize: '9px', padding: '1px 5px', borderRadius: '4px',
+                            background: isReady ? '#d4edda' : '#fff3cd',
+                            color: isReady ? '#1e7a34' : '#856404',
+                            fontWeight: 600,
+                          }}>
+                            JP {isReady ? '✓' : '⏳'}
+                          </span>
+                        )
+                      })()}
+                    </div>
+                  )}
                 </div>
 
                 {/* Category */}

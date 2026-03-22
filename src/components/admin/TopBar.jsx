@@ -1,6 +1,6 @@
 import React from 'react'
 import { LANG_OPTIONS } from '../../config/constants'
-import { getImportersForRegion, REGION_CODE_LABELS } from '../../data/importers'
+import { getImportersForRegion, REGION_CODE_LABELS, ACTIVE_REGIONS } from '../../data/importers'
 
 /**
  * Stripe-styled top configuration bar.
@@ -27,7 +27,7 @@ const TopBar = ({
   // Force re-read when importerVersion changes
   void importerVersion
   const importersForRegion = getImportersForRegion(selectedRegion, { onlyComplete: true })
-  const regionCodes = allowedRegionCodes || Object.keys(REGION_CODE_LABELS)
+  const regionCodes = allowedRegionCodes || ACTIVE_REGIONS
 
   return (
     <div style={{

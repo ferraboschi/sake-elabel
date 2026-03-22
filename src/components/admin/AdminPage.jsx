@@ -175,7 +175,7 @@ const AdminPage = () => {
             background: products.dataSource === 'airtable' ? '#d4edda' : '#fff3cd',
             color: products.dataSource === 'airtable' ? '#1e7a34' : '#856404',
           }}>
-            {products.dataSource === 'airtable' ? `☁ Airtable · ${products.allProducts.length}` : '📁 Locale'}
+            {products.dataSource === 'airtable' ? `☁ Airtable · ${products.allProducts.filter(p => p.name?.trim()).length}` : '📁 Locale'}
           </div>
           <button
             onClick={products.handleRefresh}

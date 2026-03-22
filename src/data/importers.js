@@ -1,5 +1,7 @@
 const STORAGE_KEY = 'sake-elabel-importers'
 
+export const ACTIVE_REGIONS = ['ITA']
+
 export const defaultImporters = {
   Italia: {
     id: 'default-it',

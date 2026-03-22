@@ -33,26 +33,55 @@ const LABEL_NESTED_FIELDS = ['ingredients', 'allergens']
 
 /**
  * Create a deterministic hash string from label-relevant product data
+ * Normalizes values to avoid false positives when opening/saving without changes
  */
 function computeLabelHash(product) {
   const parts = []
 
+  // Normalize function: handles numbers, strings, and null/undefined consistently
+  const normalize = (val) => {
+    if (val === null || val === undefined) return ''
+    if (typeof val === 'number') {
+      // For decimals: fixed precision, for integers: parseInt
+      const str = val.toString()
+      if (str.includes('.')) {
+        return parseFloat(val).toFixed(4)
+      } else {
+        return parseInt(val).toString()
+      }
+    }
+    if (typeof val === 'string') return val.trim()
+    return String(val)
+  }
+
   // Flat fields
   for (const key of LABEL_FIELDS) {
     const val = product[key]
-    parts.push(`${key}:${val ?? ''}`)
+    parts.push(`${key}:${normalize(val)}`)
   }
 
   // Nested multi-language fields (ingredients, allergens)
   for (const key of LABEL_NESTED_FIELDS) {
     const obj = product[key] || {}
-    const sorted = Object.keys(obj).sort().map(k => `${k}=${obj[k] || ''}`).join('|')
+    const sorted = Object.keys(obj).sort().map(k => `${k}=${normalize(obj[k])}`).join('|')
     parts.push(`${key}:{${sorted}}`)
   }
 
-  // Nutrition
+  // Nutrition - normalize each value with fixed precision
   const n = product.nutrition || {}
-  const nutritionStr = Object.keys(n).sort().map(k => `${k}=${n[k] ?? ''}`).join('|')
+  const nutritionStr = Object.keys(n).sort().map(k => {
+    const val = n[k]
+    if (val === null || val === undefined) return `${k}=`
+    if (typeof val === 'number') {
+      const str = val.toString()
+      if (str.includes('.')) {
+        return `${k}=${parseFloat(val).toFixed(4)}`
+      } else {
+        return `${k}=${parseInt(val)}`
+      }
+    }
+    return `${k}=${String(val).trim()}`
+  }).join('|')
   parts.push(`nutrition:{${nutritionStr}}`)
 
   // Simple string hash (djb2)
