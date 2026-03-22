@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { useAuth } from '../contexts/AuthContext'
 import { fetchProducts, isAirtableConfigured } from '../services/airtable'
 import { getLabels, getLabelStats } from '../services/labelStore'
+import { batchCheckReprint } from '../services/printSnapshot'
 import { getAllImporters, getCustomImporters, REGION_CODE_LABELS, REGION_CODE_TO_IMPORTER_COUNTRY, defaultImporters } from '../data/importers'
 
 const Dashboard = () => {
@@ -29,6 +30,24 @@ const Dashboard = () => {
         const fetched = await fetchProducts()
         if (fetched) products = fetched.filter(p => p.name && p.name.trim())
       }
+
+      // Check reprint status for all products
+      const reprintStatus = await batchCheckReprint(products)
+
+      // Filter products that need reprint
+      const reprintProducts = products
+        .filter(p => reprintStatus[p.code || p._recordId]?.needsReprint)
+        .map(p => {
+          const key = p.code || p._recordId
+          const printedAt = reprintStatus[key]?.printedAt
+          return {
+            name: p.name,
+            code: p.code,
+            volumeMl: p.volumeMl,
+            printedAt,
+            slug: p.slug,
+          }
+        })
 
       // Label archive stats
       const labelStats = getLabelStats()
@@ -96,6 +115,7 @@ const Dashboard = () => {
           regionsTotal: regionCodes.length,
           regionsCovered: regionsWithImporter.length,
         },
+        reprintProducts,
       })
     } catch (err) {
       console.error('Dashboard stats error:', err)
@@ -226,6 +246,61 @@ const Dashboard = () => {
                 {s.importers.regionsCovered}/{s.importers.regionsTotal}
               </div>
               <div style={{ fontSize: '12px', color: '#888', marginTop: '2px' }}>Paesi</div>
+            </div>
+          </div>
+        )}
+
+        {/* Etichette da rigenerare section */}
+        {s && s.reprintProducts && s.reprintProducts.length > 0 && (
+          <div style={{
+            background: '#fff', borderLeft: '4px solid #ff6b35', borderRadius: '8px',
+            padding: '20px', marginBottom: '24px', border: '1px solid #ffe0d6', borderLeftWidth: '4px',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+              <span style={{ fontSize: '20px' }}>⚠️</span>
+              <div style={{ fontSize: '16px', fontWeight: 700, color: '#222' }}>Etichette da rigenerare</div>
+            </div>
+            <div style={{ fontSize: '13px', color: '#888', marginBottom: '14px' }}>
+              Modifiche avvenute dall'ultima generazione
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {s.reprintProducts.map((product) => (
+                <div
+                  key={product.code || product.slug}
+                  style={{
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                    padding: '10px 12px', background: '#f9f9f9', borderRadius: '6px',
+                    borderLeft: '3px solid #ff9500', fontSize: '13px',
+                  }}
+                >
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 600, color: '#222', marginBottom: '2px' }}>
+                      {product.name}
+                    </div>
+                    <div style={{ color: '#888', fontSize: '12px' }}>
+                      {product.code && <span>{product.code}</span>}
+                      {product.volumeMl && <span> · {product.volumeMl} ml</span>}
+                      {product.printedAt && (
+                        <span> · Stampa: {new Date(product.printedAt).toLocaleDateString('it-IT')}</span>
+                      )}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => navigate(`/admin/product/${product.slug}`)}
+                    style={{
+                      padding: '6px 12px', background: '#ff6b35', color: '#fff',
+                      border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: 600,
+                      cursor: 'pointer', whiteSpace: 'nowrap', marginLeft: '12px',
+                      transition: 'background 0.2s ease',
+                    }}
+                    onMouseEnter={e => { e.currentTarget.style.background = '#e55a1f' }}
+                    onMouseLeave={e => { e.currentTarget.style.background = '#ff6b35' }}
+                  >
+                    Rigenera →
+                  </button>
+                </div>
+              ))}
             </div>
           </div>
         )}

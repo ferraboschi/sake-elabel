@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 /**
  * Stripe-inspired product list view.
  * Clean table layout with status badges, search, filters.
+ * Products grouped by name, with family headers and indented variants.
  */
 
 const Badge = ({ color, bg, children }) => (
@@ -43,6 +44,24 @@ const ProductList = ({
     }
     return true
   })
+
+  // Group filtered products by name, sort families by name and variants by volume
+  const grouped = filtered.reduce((acc, product) => {
+    const key = product.name || ''
+    if (!acc[key]) {
+      acc[key] = []
+    }
+    acc[key].push(product)
+    return acc
+  }, {})
+
+  // Sort each family by volume ascending, then create sorted family list
+  const families = Object.entries(grouped)
+    .map(([name, variants]) => ({
+      name,
+      variants: variants.sort((a, b) => (a.volumeMl || 0) - (b.volumeMl || 0)),
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name))
 
   const toggleReprint = (slug) => {
     const next = new Set(reprintSlugs)
@@ -100,7 +119,7 @@ const ProductList = ({
 
       {/* Result count */}
       <div style={{ fontSize: '13px', color: '#8898aa', marginBottom: '12px' }}>
-        {filtered.length} prodotti
+        {filtered.length} prodotti ({families.length} famiglie)
         {filterCategory ? ` in "${filterCategory}"` : ''}
         {searchQuery ? ` per "${searchQuery}"` : ''}
       </div>
@@ -132,186 +151,232 @@ const ProductList = ({
 
         {/* Product rows */}
         <div style={{ maxHeight: '600px', overflowY: 'auto' }}>
-          {filtered.map(product => {
-            const hasLabel = (labelsMap[product.slug]?.length > 0) || (labelsMap[product.code]?.length > 0)
-            const needsReprint = reprintStatus[product.code]?.needsReprint
-
-            // Completeness check
-            const missing = []
-            if (!product.ingredients?.it && !product.ingredients?.en) missing.push('Ingredienti')
-            if (!product.alcoholPct) missing.push('Alcool')
-            if (!product.volumeMl) missing.push('Volume')
-            if (!product.barcode) missing.push('EAN')
-            const isComplete = missing.length === 0
-
-            return (
-              <div
-                key={product.slug}
-                style={{
+          {families.map(family => (
+            <div key={family.name}>
+              {/* Family header - only shown if more than 1 variant */}
+              {family.variants.length > 1 && (
+                <div style={{
                   display: 'grid',
                   gridTemplateColumns: '32px 1fr 100px 60px 60px 70px 60px 80px 120px',
                   gap: '8px', padding: '12px 16px',
-                  borderBottom: '1px solid #f0f3f5',
+                  borderBottom: '1px solid #e3e8ee',
                   alignItems: 'center',
-                  cursor: 'pointer',
-                  transition: 'background 0.1s',
-                }}
-                onMouseEnter={e => e.currentTarget.style.background = '#f9fafb'}
-                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-              >
-                {/* Checkbox */}
-                <div>
-                  {hasLabel && (
-                    <input
-                      type="checkbox"
-                      checked={reprintSlugs.has(product.slug)}
-                      onChange={() => toggleReprint(product.slug)}
-                      style={{ width: '16px', height: '16px', cursor: 'pointer', accentColor: '#635bff' }}
-                      onClick={e => e.stopPropagation()}
-                    />
-                  )}
-                </div>
-
-                {/* Product info */}
-                <div onClick={() => navigate(`/admin/product/${product.slug}`)} style={{ minWidth: 0 }}>
-                  <div style={{
-                    fontSize: '14px', fontWeight: 500, color: '#0a2540',
-                    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                  }}>
-                    {product.name}
+                  background: '#f9fafb',
+                  fontSize: '13px', fontWeight: 600, color: '#0a2540',
+                }}>
+                  <div></div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span>{family.name}</span>
+                    {family.variants[0]?.winery && (
+                      <span style={{ fontSize: '12px', color: '#8898aa', fontWeight: 'normal' }}>
+                        {family.variants[0].winery}
+                      </span>
+                    )}
+                    <span style={{
+                      fontSize: '11px', padding: '2px 8px', borderRadius: '10px',
+                      background: '#eef2ff', color: '#635bff', fontWeight: 600,
+                    }}>
+                      {family.variants.length} varianti
+                    </span>
                   </div>
-                  <div style={{ fontSize: '12px', color: '#8898aa', marginTop: '2px' }}>
-                    {product.code}
-                    {product.volumeMl ? ` · ${product.volumeMl}ml` : ''}
-                    {product.alcoholPct ? ` · ${product.alcoholPct}%` : ''}
-                    {product.winery ? ` · ${product.winery}` : ''}
-                  </div>
-                  {/* Sales regions */}
-                  {product.salesRegion?.length > 0 && (
-                    <div style={{ display: 'flex', gap: '3px', marginTop: '3px', flexWrap: 'wrap' }}>
-                      {product.salesRegion.map(code => (
-                        <span key={code} style={{
-                          fontSize: '9px', padding: '1px 5px', borderRadius: '4px',
-                          background: '#eef2ff', color: '#635bff', fontWeight: 600,
-                        }}>{code}</span>
-                      ))}
-                    </div>
-                  )}
-                  {/* JP Ready badge */}
-                  {product.winery && (
-                    <div style={{ marginTop: '3px' }}>
-                      {(() => {
-                        const hasIngredients = product.ingredients?.it || product.ingredients?.en
-                        const hasAlcohol = product.alcoholPct
-                        const hasEnergy = product.nutrition?.energy_kcal
-                        const isReady = hasIngredients && hasAlcohol && hasEnergy
-                        return (
-                          <span style={{
-                            fontSize: '9px', padding: '1px 5px', borderRadius: '4px',
-                            background: isReady ? '#d4edda' : '#fff3cd',
-                            color: isReady ? '#1e7a34' : '#856404',
-                            fontWeight: 600,
-                          }}>
-                            JP {isReady ? '✓' : '⏳'}
-                          </span>
-                        )
-                      })()}
-                    </div>
-                  )}
+                  <div></div>
+                  <div></div>
+                  <div></div>
+                  <div></div>
+                  <div></div>
+                  <div></div>
                 </div>
+              )}
 
-                {/* Category */}
-                <div style={{ fontSize: '12px', color: '#596780' }}>
-                  {product.category || '—'}
-                </div>
+              {/* Family variants */}
+              {family.variants.map(product => {
+                const hasLabel = (labelsMap[product.slug]?.length > 0) || (labelsMap[product.code]?.length > 0)
+                const needsReprint = reprintStatus[product.code]?.needsReprint
 
-                {/* EAN */}
-                <div style={{ textAlign: 'center' }}>
-                  {product.barcode
-                    ? <Badge color="#1e7a34" bg="#d4edda">✓</Badge>
-                    : <Badge color="#856404" bg="#fff3cd">—</Badge>
-                  }
-                </div>
+                // Completeness check
+                const missing = []
+                if (!product.ingredients?.it && !product.ingredients?.en) missing.push('Ingredienti')
+                if (!product.alcoholPct) missing.push('Alcool')
+                if (!product.volumeMl) missing.push('Volume')
+                if (!product.barcode) missing.push('EAN')
+                const isComplete = missing.length === 0
 
-                {/* EAN Box */}
-                <div style={{ textAlign: 'center' }}>
-                  {product.barcodeBox
-                    ? <Badge color="#1e7a34" bg="#d4edda">✓</Badge>
-                    : <Badge color="#adb5bd" bg="#f0f0f0">—</Badge>
-                  }
-                </div>
+                const isFamily = family.variants.length > 1
 
-                {/* Bottiglia (colore + logo materiale) */}
-                <div style={{ textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '3px' }}>
-                  {product.bottleMaterialCode ? (
-                    <>
-                      {product.bottleColor && (
-                        <span style={{
-                          display: 'inline-block', width: '10px', height: '10px', borderRadius: '50%',
-                          border: '1px solid #ccc',
-                          background: product.bottleColor === 'Trasparente' ? '#f0f0f0'
-                            : product.bottleColor === 'Verde' ? '#2d7d3a'
-                            : product.bottleColor === 'Marrone' ? '#8B4513'
-                            : product.bottleColor === 'Nera' ? '#1a1a1a' : '#ddd',
-                        }} title={product.bottleColor} />
-                      )}
-                      <img
-                        src={`${import.meta.env.BASE_URL || '/'}icons/${product.bottleMaterialCode.replace(/\s/g, '').toLowerCase()}.png`}
-                        alt={product.bottleMaterialCode}
-                        title={`${product.bottleColor || ''} ${product.bottleMaterialCode}`}
-                        style={{ width: '20px', height: '20px', objectFit: 'contain' }}
-                        onError={e => { e.target.style.display = 'none' }}
-                      />
-                    </>
-                  ) : (
-                    <span style={{ color: '#adb5bd', fontSize: '11px' }}>—</span>
-                  )}
-                </div>
-
-                {/* Tappo (materiale) */}
-                <div style={{ textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  {product.capMaterialCode ? (
-                    <img
-                      src={`${import.meta.env.BASE_URL || '/'}icons/${product.capMaterialCode.replace(/[\s\/]/g, '').toLowerCase()}.png`}
-                      alt={product.capMaterialCode}
-                      title={`${product.capType || ''} ${product.capMaterialCode}`}
-                      style={{ width: '20px', height: '20px', objectFit: 'contain' }}
-                      onError={e => { e.target.replaceWith(document.createTextNode(product.capMaterialCode)) }}
-                    />
-                  ) : (
-                    <span style={{ color: '#adb5bd', fontSize: '11px' }}>—</span>
-                  )}
-                </div>
-
-                {/* Status */}
-                <div style={{ textAlign: 'center' }}>
-                  {needsReprint ? (
-                    <Badge color="#842029" bg="#f8d7da">Ristampa</Badge>
-                  ) : isComplete ? (
-                    <Badge color="#1e7a34" bg="#d4edda">OK</Badge>
-                  ) : (
-                    <Badge color="#856404" bg="#fff3cd">{missing.length} campo{missing.length > 1 ? 'i' : ''}</Badge>
-                  )}
-                </div>
-
-                {/* Action */}
-                <div style={{ textAlign: 'right' }}>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); navigate(`/admin/product/${product.slug}`) }}
+                return (
+                  <div
+                    key={product.slug}
                     style={{
-                      padding: '6px 14px', fontSize: '13px', fontWeight: 500,
-                      background: '#635bff', color: '#fff', border: 'none',
-                      borderRadius: '6px', cursor: 'pointer', transition: 'background 0.15s',
+                      display: 'grid',
+                      gridTemplateColumns: '32px 1fr 100px 60px 60px 70px 60px 80px 120px',
+                      gap: '8px',
+                      padding: isFamily ? '10px 16px 10px 48px' : '12px 16px',
+                      borderBottom: '1px solid #f0f3f5',
+                      alignItems: 'center',
+                      cursor: 'pointer',
+                      transition: 'background 0.1s',
+                      background: isFamily ? '#fafbfc' : 'transparent',
                     }}
-                    onMouseEnter={e => e.currentTarget.style.background = '#4b45d1'}
-                    onMouseLeave={e => e.currentTarget.style.background = '#635bff'}
+                    onMouseEnter={e => e.currentTarget.style.background = isFamily ? '#f5f7fa' : '#f9fafb'}
+                    onMouseLeave={e => e.currentTarget.style.background = isFamily ? '#fafbfc' : 'transparent'}
                   >
-                    Modifica
-                  </button>
-                </div>
-              </div>
-            )
-          })}
+                    {/* Checkbox */}
+                    <div>
+                      {hasLabel && (
+                        <input
+                          type="checkbox"
+                          checked={reprintSlugs.has(product.slug)}
+                          onChange={() => toggleReprint(product.slug)}
+                          style={{ width: '16px', height: '16px', cursor: 'pointer', accentColor: '#635bff' }}
+                          onClick={e => e.stopPropagation()}
+                        />
+                      )}
+                    </div>
+
+                    {/* Product info - simplified for family variants */}
+                    <div onClick={() => navigate(`/admin/product/${product.slug}`)} style={{ minWidth: 0 }}>
+                      {!isFamily && (
+                        <div style={{
+                          fontSize: '14px', fontWeight: 500, color: '#0a2540',
+                          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                        }}>
+                          {product.name}
+                        </div>
+                      )}
+                      <div style={{ fontSize: '12px', color: '#8898aa', marginTop: isFamily ? '0' : '2px' }}>
+                        {product.code}
+                        {product.volumeMl ? ` · ${product.volumeMl}ml` : ''}
+                        {product.alcoholPct ? ` · ${product.alcoholPct}%` : ''}
+                        {!isFamily && product.winery ? ` · ${product.winery}` : ''}
+                      </div>
+                      {/* Sales regions - only for non-family or first variant */}
+                      {!isFamily && product.salesRegion?.length > 0 && (
+                        <div style={{ display: 'flex', gap: '3px', marginTop: '3px', flexWrap: 'wrap' }}>
+                          {product.salesRegion.map(code => (
+                            <span key={code} style={{
+                              fontSize: '9px', padding: '1px 5px', borderRadius: '4px',
+                              background: '#eef2ff', color: '#635bff', fontWeight: 600,
+                            }}>{code}</span>
+                          ))}
+                        </div>
+                      )}
+                      {/* JP Ready badge - only for non-family or first variant */}
+                      {!isFamily && product.winery && (
+                        <div style={{ marginTop: '3px' }}>
+                          {(() => {
+                            const hasIngredients = product.ingredients?.it || product.ingredients?.en
+                            const hasAlcohol = product.alcoholPct
+                            const hasEnergy = product.nutrition?.energy_kcal
+                            const isReady = hasIngredients && hasAlcohol && hasEnergy
+                            return (
+                              <span style={{
+                                fontSize: '9px', padding: '1px 5px', borderRadius: '4px',
+                                background: isReady ? '#d4edda' : '#fff3cd',
+                                color: isReady ? '#1e7a34' : '#856404',
+                                fontWeight: 600,
+                              }}>
+                                JP {isReady ? '✓' : '⏳'}
+                              </span>
+                            )
+                          })()}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Category */}
+                    <div style={{ fontSize: '12px', color: '#596780' }}>
+                      {!isFamily && (product.category || '—')}
+                    </div>
+
+                    {/* EAN */}
+                    <div style={{ textAlign: 'center' }}>
+                      {product.barcode
+                        ? <Badge color="#1e7a34" bg="#d4edda">✓</Badge>
+                        : <Badge color="#856404" bg="#fff3cd">—</Badge>
+                      }
+                    </div>
+
+                    {/* EAN Box */}
+                    <div style={{ textAlign: 'center' }}>
+                      {product.barcodeBox
+                        ? <Badge color="#1e7a34" bg="#d4edda">✓</Badge>
+                        : <Badge color="#adb5bd" bg="#f0f0f0">—</Badge>
+                      }
+                    </div>
+
+                    {/* Bottiglia (colore + logo materiale) */}
+                    <div style={{ textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '3px' }}>
+                      {product.bottleMaterialCode ? (
+                        <>
+                          {product.bottleColor && (
+                            <span style={{
+                              display: 'inline-block', width: '10px', height: '10px', borderRadius: '50%',
+                              border: '1px solid #ccc',
+                              background: product.bottleColor === 'Trasparente' ? '#f0f0f0'
+                                : product.bottleColor === 'Verde' ? '#2d7d3a'
+                                : product.bottleColor === 'Marrone' ? '#8B4513'
+                                : product.bottleColor === 'Nera' ? '#1a1a1a' : '#ddd',
+                            }} title={product.bottleColor} />
+                          )}
+                          <img
+                            src={`${import.meta.env.BASE_URL || '/'}icons/${product.bottleMaterialCode.replace(/\s/g, '').toLowerCase()}.png`}
+                            alt={product.bottleMaterialCode}
+                            title={`${product.bottleColor || ''} ${product.bottleMaterialCode}`}
+                            style={{ width: '20px', height: '20px', objectFit: 'contain' }}
+                            onError={e => { e.target.style.display = 'none' }}
+                          />
+                        </>
+                      ) : (
+                        <span style={{ color: '#adb5bd', fontSize: '11px' }}>—</span>
+                      )}
+                    </div>
+
+                    {/* Tappo (materiale) */}
+                    <div style={{ textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      {product.capMaterialCode ? (
+                        <img
+                          src={`${import.meta.env.BASE_URL || '/'}icons/${product.capMaterialCode.replace(/[\s\/]/g, '').toLowerCase()}.png`}
+                          alt={product.capMaterialCode}
+                          title={`${product.capType || ''} ${product.capMaterialCode}`}
+                          style={{ width: '20px', height: '20px', objectFit: 'contain' }}
+                          onError={e => { e.target.replaceWith(document.createTextNode(product.capMaterialCode)) }}
+                        />
+                      ) : (
+                        <span style={{ color: '#adb5bd', fontSize: '11px' }}>—</span>
+                      )}
+                    </div>
+
+                    {/* Status */}
+                    <div style={{ textAlign: 'center' }}>
+                      {needsReprint ? (
+                        <Badge color="#842029" bg="#f8d7da">Ristampa</Badge>
+                      ) : isComplete ? (
+                        <Badge color="#1e7a34" bg="#d4edda">OK</Badge>
+                      ) : (
+                        <Badge color="#856404" bg="#fff3cd">{missing.length} campo{missing.length > 1 ? 'i' : ''}</Badge>
+                      )}
+                    </div>
+
+                    {/* Action */}
+                    <div style={{ textAlign: 'right' }}>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); navigate(`/admin/product/${product.slug}`) }}
+                        style={{
+                          padding: '6px 14px', fontSize: '13px', fontWeight: 500,
+                          background: '#635bff', color: '#fff', border: 'none',
+                          borderRadius: '6px', cursor: 'pointer', transition: 'background 0.15s',
+                        }}
+                        onMouseEnter={e => e.currentTarget.style.background = '#4b45d1'}
+                        onMouseLeave={e => e.currentTarget.style.background = '#635bff'}
+                      >
+                        Modifica
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          ))}
 
           {filtered.length === 0 && (
             <div style={{ padding: '48px', textAlign: 'center', color: '#8898aa' }}>

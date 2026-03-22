@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { LANG_OPTIONS, estimateTitleLines } from '../../config/constants'
 import { getImportersForRegion, REGION_CODE_LABELS } from '../../data/importers'
@@ -405,6 +405,200 @@ const ProductEditor = ({
             </span>
           )}
         </div>
+      </div>
+
+      {/* ======= SIBLING PROPAGATION ======= */}
+      <SiblingPropagation
+        product={product}
+        allProducts={allProducts}
+        setAllProducts={setAllProducts}
+        reviewEdits={re}
+        selectedLanguage={selectedLanguage}
+      />
+    </div>
+  )
+}
+
+/**
+ * Sibling propagation component.
+ * Shows when the current product has siblings (same name, different volumes).
+ * Allows propagating shared data (ingredients, allergens, alcohol, nutrition) to siblings.
+ */
+const SiblingPropagation = ({ product, allProducts, setAllProducts, reviewEdits, selectedLanguage }) => {
+  const [propagating, setPropagating] = useState(false)
+  const [propagated, setPropagated] = useState(false)
+
+  const siblings = useMemo(() => {
+    if (!product) return []
+    return allProducts.filter(p =>
+      p.name === product.name && p.slug !== product.slug && p.volumeMl
+    )
+  }, [product, allProducts])
+
+  if (siblings.length === 0) return null
+
+  // Fields that are shared across siblings (NOT volume-specific like EAN, volume)
+  const sharedFields = ['ingredients', 'allergens', 'alcoholPct', 'nutrition', 'countryOfOrigin', 'seimaibuai']
+
+  const handlePropagate = async () => {
+    setPropagating(true)
+    try {
+      // Build the data to propagate from current product + review edits
+      const propagateData = {}
+
+      // Ingredients: merge current product data with review edits
+      if (reviewEdits.ingredients) {
+        propagateData.ingredients = {
+          ...product.ingredients,
+          [selectedLanguage]: reviewEdits.ingredients,
+        }
+      } else if (product.ingredients) {
+        propagateData.ingredients = product.ingredients
+      }
+
+      // Allergens
+      if (reviewEdits.allergens !== undefined) {
+        propagateData.allergens = {
+          ...product.allergens,
+          [selectedLanguage]: reviewEdits.allergens,
+        }
+      } else if (product.allergens) {
+        propagateData.allergens = product.allergens
+      }
+
+      // Alcohol
+      const alcoholVal = reviewEdits.alcoholPct
+        ? parseFloat(reviewEdits.alcoholPct)
+        : product.alcoholPct
+      if (alcoholVal) propagateData.alcoholPct = alcoholVal
+
+      // Nutrition (from product state, not review edits)
+      if (product.nutrition) propagateData.nutrition = product.nutrition
+
+      // Country of origin
+      const origin = reviewEdits.countryOfOrigin || product.countryOfOrigin
+      if (origin) propagateData.countryOfOrigin = origin
+
+      // Seimaibuai
+      if (product.seimaibuai) propagateData.seimaibuai = product.seimaibuai
+
+      // Update local state for all siblings
+      setAllProducts(prev => prev.map(p => {
+        if (p.name !== product.name || p.slug === product.slug) return p
+        return { ...p, ...propagateData }
+      }))
+
+      // Persist to Airtable for each sibling
+      if (isAirtableConfigured()) {
+        for (const sibling of siblings) {
+          if (!sibling._recordId) continue
+          const payload = {}
+          const langMap = { it: 'It', en: 'En', de: 'De', fr: 'Fr', es: 'Es' }
+
+          if (propagateData.ingredients) {
+            for (const [lang, suffix] of Object.entries(langMap)) {
+              if (propagateData.ingredients[lang]) payload[`ingredients${suffix}`] = propagateData.ingredients[lang]
+            }
+          }
+          if (propagateData.allergens) {
+            for (const [lang, suffix] of Object.entries(langMap)) {
+              if (propagateData.allergens[lang]) payload[`allergens${suffix}`] = propagateData.allergens[lang]
+            }
+          }
+          if (propagateData.alcoholPct) {
+            payload.alcoholPct = propagateData.alcoholPct <= 1
+              ? propagateData.alcoholPct
+              : propagateData.alcoholPct / 100
+          }
+          if (propagateData.nutrition) {
+            payload.energyKj = propagateData.nutrition.energy_kj
+            payload.energyKcal = propagateData.nutrition.energy_kcal
+            payload.fatG = propagateData.nutrition.fat
+            payload.saturatedFatG = propagateData.nutrition.saturated_fat
+            payload.carbsG = propagateData.nutrition.carbs
+            payload.sugarsG = propagateData.nutrition.sugars
+            payload.proteinG = propagateData.nutrition.protein
+            payload.saltG = propagateData.nutrition.salt
+          }
+          if (propagateData.countryOfOrigin) payload.countryOfOrigin = propagateData.countryOfOrigin
+
+          if (Object.keys(payload).length > 0) {
+            updateProduct(sibling._recordId, payload).catch(err =>
+              console.warn(`[Propagate] ${sibling.code}:`, err.message)
+            )
+          }
+        }
+      }
+
+      setPropagated(true)
+      setTimeout(() => setPropagated(false), 4000)
+    } catch (err) {
+      console.error('[Propagate] Error:', err)
+    } finally {
+      setPropagating(false)
+    }
+  }
+
+  return (
+    <div style={{
+      ...sectionStyle,
+      borderLeft: '4px solid #f59e0b',
+      background: '#fffbeb',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+        <div style={{
+          width: '28px', height: '28px', borderRadius: '8px',
+          background: '#fef3c7', display: 'flex', alignItems: 'center',
+          justifyContent: 'center', fontSize: '14px',
+        }}>🔗</div>
+        <div>
+          <h3 style={{ margin: 0, fontSize: '14px', fontWeight: 600, color: '#92400e' }}>
+            Formati fratelli
+          </h3>
+          <p style={{ margin: 0, fontSize: '12px', color: '#b45309' }}>
+            Stesso sake, {siblings.length + 1} formati — propaga ingredienti, alcool, nutrizione
+          </p>
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '12px' }}>
+        {/* Current product */}
+        <span style={{
+          padding: '4px 10px', borderRadius: '6px', fontSize: '12px', fontWeight: 600,
+          background: '#fbbf24', color: '#78350f',
+        }}>
+          {product.volumeMl}ml · {product.code} (corrente)
+        </span>
+        {/* Siblings */}
+        {siblings.map(s => (
+          <span key={s.slug} style={{
+            padding: '4px 10px', borderRadius: '6px', fontSize: '12px', fontWeight: 500,
+            background: '#fef3c7', color: '#92400e', border: '1px solid #fde68a',
+          }}>
+            {s.volumeMl}ml · {s.code}
+          </span>
+        ))}
+      </div>
+
+      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+        <button
+          onClick={handlePropagate}
+          disabled={propagating}
+          style={{
+            padding: '8px 18px', fontSize: '13px', fontWeight: 600,
+            background: propagated ? '#059669' : '#f59e0b',
+            color: '#fff', border: 'none', borderRadius: '6px',
+            cursor: propagating ? 'default' : 'pointer',
+            transition: 'all 0.15s',
+          }}
+        >
+          {propagating ? 'Propagazione...'
+            : propagated ? '✓ Propagato!'
+            : `Propaga ai ${siblings.length} fratell${siblings.length === 1 ? 'o' : 'i'}`}
+        </button>
+        <span style={{ fontSize: '11px', color: '#92400e' }}>
+          Ingredienti, allergeni, alcool, nutrizione, origine
+        </span>
       </div>
     </div>
   )
