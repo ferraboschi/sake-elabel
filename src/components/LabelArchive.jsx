@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { useNavigate } from 'react-router-dom'
-import { searchLabels, getLabelStats, deleteLabel } from '../services/labelStore'
+import { searchLabels, getLabelStats } from '../services/labelStore'
 import { downloadLabelPDF, downloadBoxLabelPDF } from '../services/labelPrinter'
 
 const LANG_LABELS = {
@@ -78,13 +78,6 @@ const LabelArchive = () => {
     setBusy(label.id)
     try { await downloadBoxLabelPDF(label) } catch (e) { console.error(e) }
     setBusy(null)
-  }
-
-  const handleDelete = (id) => {
-    if (window.confirm('Eliminare questa etichetta dall\'archivio?')) {
-      deleteLabel(id)
-      refreshLabels()
-    }
   }
 
   const countries = [...new Set(labels.map(l => l.country))].sort()
@@ -219,10 +212,10 @@ const LabelArchive = () => {
                         </button>
                       </div>
 
-                      {/* Delete */}
-                      <button onClick={() => handleDelete(label.id)} style={s.btnDanger} title="Elimina">
-                        ✕
-                      </button>
+                      {/* Printed badge — labels cannot be deleted once generated */}
+                      <span style={s.printedBadge} title="Etichetta scaricata — non eliminabile">
+                        Stampata
+                      </span>
                     </div>
                   ))}
                 </div>
@@ -293,10 +286,9 @@ const s = {
     background: 'none', color: '#888', border: '1px solid #eee', borderRadius: '8px',
     padding: '8px 16px', fontSize: '13px', cursor: 'pointer',
   },
-  btnDanger: {
-    background: 'none', color: '#d32f2f', border: '1px solid #ffcdd2', borderRadius: '4px',
-    padding: '2px 6px', fontSize: '12px', cursor: 'pointer', fontWeight: 600,
-    lineHeight: 1,
+  printedBadge: {
+    fontSize: '9px', fontWeight: 600, color: '#1e7a34', background: '#d4edda',
+    padding: '2px 6px', borderRadius: '4px', whiteSpace: 'nowrap',
   },
 }
 

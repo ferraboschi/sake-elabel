@@ -63,16 +63,20 @@ export const getLabels = () => {
 
 /**
  * Generate ALL possible dedup keys for a label.
- * Returns both code-based and slug-based keys so that old labels (no code)
- * and new labels (with code) are recognized as the same product.
+ * Returns code-based, slug-based, AND name+volume-based keys so that
+ * any matching dimension is enough to recognize duplicates.
  */
 const getLabelKeys = (label) => {
   const lang = label.language || ''
   const country = label.country || ''
   const keys = []
-  if (label.productCode) keys.push(`code:${label.productCode}__${lang}__${country}`)
-  if (label.productSlug) keys.push(`slug:${label.productSlug}__${lang}__${country}`)
-  if (label.slug)        keys.push(`slug:${label.slug}__${lang}__${country}`)
+  if (label.productCode)  keys.push(`code:${label.productCode}__${lang}__${country}`)
+  if (label.productSlug)  keys.push(`slug:${label.productSlug}__${lang}__${country}`)
+  if (label.slug)         keys.push(`slug:${label.slug}__${lang}__${country}`)
+  // Name+volume key: catches duplicates where code/slug differ but it's the same product
+  if (label.productName && label.volumeMl) {
+    keys.push(`nv:${label.productName.trim().toLowerCase()}__${label.volumeMl}__${lang}__${country}`)
+  }
   // Fallback: at least one key must exist
   if (keys.length === 0) keys.push(`id:${label.id}__${lang}__${country}`)
   return keys
