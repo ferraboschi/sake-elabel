@@ -31,8 +31,9 @@ const ProductList = ({
     if (!p.name?.trim()) return false
     if (p.status === 'CANCELED') return false
     if (filterCategory && p.category !== filterCategory) return false
-    if (filterLabelStatus === 'with-label' && !(labelsMap[p.slug]?.length > 0)) return false
-    if (filterLabelStatus === 'without-label' && (labelsMap[p.slug]?.length > 0)) return false
+    const pHasLabel = (labelsMap[p.slug]?.length > 0) || (labelsMap[p.code]?.length > 0)
+    if (filterLabelStatus === 'with-label' && !pHasLabel) return false
+    if (filterLabelStatus === 'without-label' && pHasLabel) return false
     if (searchQuery) {
       const q = searchQuery.toLowerCase()
       return (p.name || '').toLowerCase().includes(q)
@@ -132,7 +133,7 @@ const ProductList = ({
         {/* Product rows */}
         <div style={{ maxHeight: '600px', overflowY: 'auto' }}>
           {filtered.map(product => {
-            const hasLabel = labelsMap[product.slug]?.length > 0
+            const hasLabel = (labelsMap[product.slug]?.length > 0) || (labelsMap[product.code]?.length > 0)
             const needsReprint = reprintStatus[product.code]?.needsReprint
 
             // Completeness check

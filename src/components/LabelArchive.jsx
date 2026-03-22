@@ -36,11 +36,12 @@ const LabelArchive = () => {
 
   useEffect(() => { refreshLabels() }, [query, filterLang, filterCountry])
 
-  // Group labels by product slug
+  // Group labels by product code (stable identifier)
   const grouped = useMemo(() => {
     const map = {}
     labels.forEach(label => {
-      const key = label.productSlug || label.productCode || label.id
+      // Use productCode as primary grouping key (stable), slug as fallback
+      const key = label.productCode || label.productSlug || label.id
       if (!map[key]) {
         map[key] = {
           productName: label.productName,

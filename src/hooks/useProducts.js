@@ -100,19 +100,28 @@ export function useProducts() {
     setRefreshing(false)
   }
 
-  // Labels map
+  // Labels map — index by both slug AND productCode for robust matching
   const existingLabels = getLabels()
   const labelsMap = useMemo(() => {
     const map = {}
     existingLabels.forEach(l => {
-      const key = l.productSlug || ''
-      if (!map[key]) map[key] = []
-      map[key].push(l)
+      // Index by slug
+      const slugKey = l.productSlug || ''
+      if (slugKey) {
+        if (!map[slugKey]) map[slugKey] = []
+        map[slugKey].push(l)
+      }
+      // Also index by productCode for stable matching
+      const codeKey = l.productCode || ''
+      if (codeKey && codeKey !== slugKey) {
+        if (!map[codeKey]) map[codeKey] = []
+        map[codeKey].push(l)
+      }
     })
     return map
   }, [existingLabels])
 
-  const hasExistingLabel = (slug) => !!(labelsMap[slug]?.length > 0)
+  const hasExistingLabel = (slug, code) => !!(labelsMap[slug]?.length > 0 || labelsMap[code]?.length > 0)
 
   const categories = useMemo(() =>
     [...new Set(allProducts.map(p => p.category).filter(Boolean))].sort(),

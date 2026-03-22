@@ -24,8 +24,10 @@ function getGitHubToken() {
 }
 
 // Fields that appear on printed labels (changes to these require reprint)
+// NOTE: 'category' is excluded because it's auto-detected by detectDetailedCategory()
+// during generation and may differ from the raw Airtable value, causing false positives.
 const LABEL_FIELDS = [
-  'name', 'category', 'alcoholPct', 'volumeMl', 'barcode', 'barcodeBox',
+  'name', 'alcoholPct', 'volumeMl', 'barcode', 'barcodeBox',
   'countryOfOrigin', 'operatorName', 'operatorAddress',
   'seimaibuai', 'code',
 ]

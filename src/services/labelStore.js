@@ -24,12 +24,34 @@
 const STORAGE_KEY = 'elabel_generated_labels'
 
 /**
- * Get all stored labels
+ * Get all stored labels (auto-deduplicates on load)
+ * If duplicates exist (same code+lang+country), keeps only the most recent.
  */
 export const getLabels = () => {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
-    return raw ? JSON.parse(raw) : []
+    if (!raw) return []
+    const labels = JSON.parse(raw)
+
+    // Deduplicate: keep only the most recent label per key
+    const seen = new Map()
+    for (const label of labels) {
+      const key = getLabelKey(label)
+      const existing = seen.get(key)
+      if (!existing || new Date(label.generatedAt) > new Date(existing.generatedAt)) {
+        seen.set(key, label)
+      }
+    }
+
+    const deduped = [...seen.values()]
+
+    // If we removed duplicates, persist the cleaned list
+    if (deduped.length < labels.length) {
+      console.log(`[LabelStore] Cleaned ${labels.length - deduped.length} duplicate(s)`)
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(deduped))
+    }
+
+    return deduped
   } catch {
     return []
   }
@@ -37,12 +59,14 @@ export const getLabels = () => {
 
 /**
  * Create a unique key for deduplication (product + language + country)
+ * Uses productCode as primary identifier (stable), with slug as fallback.
  */
 const getLabelKey = (label) => {
-  const slug = label.productSlug || label.slug || ''
+  // productCode is the stable Airtable identifier (e.g. S093-1800)
+  const id = label.productCode || label.productSlug || label.slug || ''
   const lang = label.language || ''
   const country = label.country || ''
-  return `${slug}__${lang}__${country}`
+  return `${id}__${lang}__${country}`
 }
 
 /**
