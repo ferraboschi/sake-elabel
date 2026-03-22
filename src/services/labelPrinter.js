@@ -229,6 +229,33 @@ const TRANSLATIONS = {
 }
 
 /**
+ * Normalize a label object so it works whether it comes directly from
+ * useGenerateLabel (raw product fields) or from labelStore (stored format).
+ * This mapping ensures downloadLabelPDF works from both the generator AND the archive.
+ */
+function normalizeLabel(raw) {
+  return {
+    ...raw,
+    // Core identifiers
+    name: raw.name || raw.productName || '',
+    code: raw.code || raw.productCode || '',
+    slug: raw.slug || raw.productSlug || '',
+    // QR code data
+    qr: raw.qr || raw.qrDataUrl || '',
+    // Importer (generator passes object, store flattens to strings)
+    importer: raw.importer || (raw.importerName ? {
+      name: raw.importerName,
+      address: raw.importerAddress || '',
+    } : null),
+    // Fields that may be missing from old stored labels
+    countryOfOrigin: raw.countryOfOrigin || '',
+    legalDescription: raw.legalDescription || '',
+    ingredients: raw.ingredients || null,
+    allergens: raw.allergens || null,
+  }
+}
+
+/**
  * Generate compact print-ready back label PDF (v3 — pixel-precise)
  *
  * y cursor tracks the TOP EDGE of where the next element will be placed.
@@ -237,7 +264,8 @@ const TRANSLATIONS = {
  * Before separator, y advances by the measured gap from the design.
  * After separator, y advances by the measured gap to next text top.
  */
-export const generateLabelPDF = async (label, options = {}) => {
+export const generateLabelPDF = async (rawLabel, options = {}) => {
+  const label = normalizeLabel(rawLabel)
   const [jpFont, pittogrammaData] = await Promise.all([
     loadJapaneseFont(),
     loadPittogramma(),
@@ -731,7 +759,8 @@ function generateBoxIconDataUrl(size = 200) {
 /**
  * Download single label PDF (bottle label)
  */
-export const downloadLabelPDF = async (label, options) => {
+export const downloadLabelPDF = async (rawLabel, options) => {
+  const label = normalizeLabel(rawLabel)
   const doc = await generateLabelPDF(label, options)
   const safeName = (label.name || 'prodotto').replace(/[^a-zA-Z0-9\s]/g, '').replace(/\s+/g, '-')
   doc.save(`${label.code || 'label'}-${safeName}-BOTTIGLIA.pdf`)
@@ -740,7 +769,8 @@ export const downloadLabelPDF = async (label, options) => {
 /**
  * Download box label PDF — replaces QR with box icon, uses box EAN
  */
-export const downloadBoxLabelPDF = async (label, options) => {
+export const downloadBoxLabelPDF = async (rawLabel, options) => {
+  const label = normalizeLabel(rawLabel)
   // Load box icon from public/icons/ (BOX.jpg or BOX.png)
   let boxIconDataUrl = await loadBoxIcon()
   // Fallback to programmatic icon if file not found

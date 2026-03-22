@@ -117,10 +117,16 @@ export const saveLabels = (labels) => {
     alcoholPct: label.alcoholPct,
     nutrition: label.nutrition || null,
     ingredients: label.ingredients || null,
+    countryOfOrigin: label.countryOfOrigin || '',
+    legalDescription: label.legalDescription || '',
+    allergens: label.allergens || null,
+    operatorName: label.operatorName || '',
+    operatorAddress: label.operatorAddress || '',
     bottleMaterialCode: label.bottleMaterialCode || '',
     capMaterialCode: label.capMaterialCode || '',
     seimaibuai: label.seimaibuai || null,
     barcode: label.barcode || '',
+    barcodeBox: label.barcodeBox || '',
   }))
 
   // Build set of ALL keys from new labels for aggressive dedup
