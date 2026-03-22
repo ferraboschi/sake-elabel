@@ -25,7 +25,8 @@ const STORAGE_KEY = 'elabel_generated_labels'
 
 /**
  * Get all stored labels (auto-deduplicates on load)
- * If duplicates exist (same code+lang+country), keeps only the most recent.
+ * Uses aggressive two-key dedup: checks both productCode and productSlug
+ * so old labels (without code) and new labels (with code) are correctly merged.
  */
 export const getLabels = () => {
   try {
@@ -33,19 +34,22 @@ export const getLabels = () => {
     if (!raw) return []
     const labels = JSON.parse(raw)
 
-    // Deduplicate: keep only the most recent label per key
-    const seen = new Map()
+    // Sort newest first so we always keep the most recent
+    labels.sort((a, b) => new Date(b.generatedAt) - new Date(a.generatedAt))
+
+    // Dedup: a label is duplicate if ANY of its keys (code-based or slug-based) was already seen
+    const seenKeys = new Set()
+    const deduped = []
     for (const label of labels) {
-      const key = getLabelKey(label)
-      const existing = seen.get(key)
-      if (!existing || new Date(label.generatedAt) > new Date(existing.generatedAt)) {
-        seen.set(key, label)
+      const keys = getLabelKeys(label)
+      const isDuplicate = keys.some(k => seenKeys.has(k))
+      if (!isDuplicate) {
+        deduped.push(label)
+        keys.forEach(k => seenKeys.add(k))
       }
     }
 
-    const deduped = [...seen.values()]
-
-    // If we removed duplicates, persist the cleaned list
+    // Persist cleaned list if duplicates were removed
     if (deduped.length < labels.length) {
       console.log(`[LabelStore] Cleaned ${labels.length - deduped.length} duplicate(s)`)
       localStorage.setItem(STORAGE_KEY, JSON.stringify(deduped))
@@ -58,11 +62,24 @@ export const getLabels = () => {
 }
 
 /**
- * Create a unique key for deduplication (product + language + country)
- * Uses productCode as primary identifier (stable), with slug as fallback.
+ * Generate ALL possible dedup keys for a label.
+ * Returns both code-based and slug-based keys so that old labels (no code)
+ * and new labels (with code) are recognized as the same product.
  */
+const getLabelKeys = (label) => {
+  const lang = label.language || ''
+  const country = label.country || ''
+  const keys = []
+  if (label.productCode) keys.push(`code:${label.productCode}__${lang}__${country}`)
+  if (label.productSlug) keys.push(`slug:${label.productSlug}__${lang}__${country}`)
+  if (label.slug)        keys.push(`slug:${label.slug}__${lang}__${country}`)
+  // Fallback: at least one key must exist
+  if (keys.length === 0) keys.push(`id:${label.id}__${lang}__${country}`)
+  return keys
+}
+
+/** Single primary key for saveLabels dedup (backward compat) */
 const getLabelKey = (label) => {
-  // productCode is the stable Airtable identifier (e.g. S093-1800)
   const id = label.productCode || label.productSlug || label.slug || ''
   const lang = label.language || ''
   const country = label.country || ''
@@ -102,11 +119,15 @@ export const saveLabels = (labels) => {
     barcode: label.barcode || '',
   }))
 
-  // Build set of new label keys for deduplication
-  const newKeys = new Set(newLabels.map(l => getLabelKey(l)))
+  // Build set of ALL keys from new labels for aggressive dedup
+  const newKeys = new Set()
+  newLabels.forEach(l => getLabelKeys(l).forEach(k => newKeys.add(k)))
 
-  // Remove existing labels that match new ones (replace them)
-  const filtered = existing.filter(l => !newKeys.has(getLabelKey(l)))
+  // Remove existing labels that match any key of the new ones (replace them)
+  const filtered = existing.filter(l => {
+    const existingKeys = getLabelKeys(l)
+    return !existingKeys.some(k => newKeys.has(k))
+  })
 
   const all = [...newLabels, ...filtered]
   localStorage.setItem(STORAGE_KEY, JSON.stringify(all))
