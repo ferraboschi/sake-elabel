@@ -6,15 +6,19 @@ import { fetchProducts, isAirtableConfigured } from '../services/airtable'
 import { getLabels, getLabelStats } from '../services/labelStore'
 import { batchCheckReprint } from '../services/printSnapshot'
 import { getAllImporters, getCustomImporters, REGION_CODE_LABELS, REGION_CODE_TO_IMPORTER_COUNTRY, defaultImporters } from '../data/importers'
+import { useGenerateLabel } from '../hooks/useGenerateLabel'
 
 const Dashboard = () => {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const { isAuthenticated, user, logout } = useAuth()
+  const { generate, generating } = useGenerateLabel()
 
   // Stats state
   const [stats, setStats] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [allProducts, setAllProducts] = useState([])
+  const [regeneratingSlug, setRegeneratingSlug] = useState(null)
 
   useEffect(() => {
     if (!isAuthenticated) return
@@ -30,6 +34,8 @@ const Dashboard = () => {
         const fetched = await fetchProducts()
         if (fetched) products = fetched.filter(p => p.name && p.name.trim())
       }
+
+      setAllProducts(products)
 
       // Check reprint status for all products
       const reprintStatus = await batchCheckReprint(products)
@@ -173,6 +179,62 @@ const Dashboard = () => {
     )
   }
 
+  // Regenerate a label directly from the dashboard
+  const handleRegenerate = async (reprintProduct) => {
+    setRegeneratingSlug(reprintProduct.slug)
+    try {
+      // Find the full product data
+      const fullProduct = allProducts.find(p => p.slug === reprintProduct.slug)
+      if (!fullProduct) {
+        console.error('Product not found:', reprintProduct.slug)
+        return
+      }
+
+      // Find the existing label in archive to get language, country, importer
+      const existingLabels = getLabels()
+      const existingLabel = existingLabels.find(l =>
+        (l.productSlug === reprintProduct.slug || l.slug === reprintProduct.slug) ||
+        (l.productCode === reprintProduct.code && reprintProduct.code)
+      )
+
+      const selectedLanguage = existingLabel?.language || 'it'
+      const selectedCountry = existingLabel?.country || 'Italia'
+
+      // Reconstruct importer from stored flat fields
+      let importer = null
+      if (existingLabel?.importerName) {
+        importer = { name: existingLabel.importerName, address: existingLabel.importerAddress || '' }
+      } else {
+        // Fallback: find importer from importers config
+        const allImp = getAllImporters()
+        const countryImp = allImp.find(i => {
+          const impCountry = REGION_CODE_TO_IMPORTER_COUNTRY[Object.keys(REGION_CODE_TO_IMPORTER_COUNTRY).find(
+            rc => REGION_CODE_LABELS[rc] === selectedCountry
+          )]
+          return impCountry && (i.country === impCountry || i.regionCode)
+        })
+        if (countryImp) importer = { name: countryImp.name, address: countryImp.address || '' }
+      }
+
+      // Generate the label (this downloads PDFs + saves snapshot)
+      await generate([fullProduct], {
+        selectedLanguage,
+        selectedCountry,
+        importer,
+      })
+
+      // Remove from the reprint list in state
+      setStats(prev => ({
+        ...prev,
+        reprintProducts: prev.reprintProducts.filter(p => p.slug !== reprintProduct.slug),
+      }))
+    } catch (err) {
+      console.error('Regeneration failed:', err)
+    } finally {
+      setRegeneratingSlug(null)
+    }
+  }
+
   // Stat pill component
   const StatPill = ({ value, label, color = '#222' }) => (
     <div style={{ textAlign: 'center', minWidth: '60px' }}>
@@ -287,17 +349,21 @@ const Dashboard = () => {
                     </div>
                   </div>
                   <button
-                    onClick={() => navigate(`/admin/product/${product.slug}`)}
+                    onClick={() => handleRegenerate(product)}
+                    disabled={regeneratingSlug === product.slug}
                     style={{
-                      padding: '6px 12px', background: '#ff6b35', color: '#fff',
+                      padding: '6px 12px',
+                      background: regeneratingSlug === product.slug ? '#ccc' : '#ff6b35',
+                      color: '#fff',
                       border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: 600,
-                      cursor: 'pointer', whiteSpace: 'nowrap', marginLeft: '12px',
+                      cursor: regeneratingSlug === product.slug ? 'wait' : 'pointer',
+                      whiteSpace: 'nowrap', marginLeft: '12px',
                       transition: 'background 0.2s ease',
                     }}
-                    onMouseEnter={e => { e.currentTarget.style.background = '#e55a1f' }}
-                    onMouseLeave={e => { e.currentTarget.style.background = '#ff6b35' }}
+                    onMouseEnter={e => { if (regeneratingSlug !== product.slug) e.currentTarget.style.background = '#e55a1f' }}
+                    onMouseLeave={e => { if (regeneratingSlug !== product.slug) e.currentTarget.style.background = '#ff6b35' }}
                   >
-                    Rigenera →
+                    {regeneratingSlug === product.slug ? 'Generando...' : 'Rigenera →'}
                   </button>
                 </div>
               ))}
