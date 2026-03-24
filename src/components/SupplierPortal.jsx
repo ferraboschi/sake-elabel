@@ -629,7 +629,7 @@ export default function SupplierPortal() {
       await generate([filledProduct], {
         selectedLanguage: 'it',
         selectedCountry: 'Italia',
-        importer: null,
+        importer: { name: 'Sake Company srl', address: 'Via Bianca di Savoia 17, Milano - Italia' },
       })
     } catch (err) {
       console.error('Print label failed:', err)
@@ -655,7 +655,7 @@ export default function SupplierPortal() {
         qr,
         language: 'it',
         country: 'Italia',
-        importer: null,
+        importer: { name: 'Sake Company srl', address: 'Via Bianca di Savoia 17, Milano - Italia' },
       }
       await downloadBoxLabelPDF(boxLabel)
     } catch (err) {
