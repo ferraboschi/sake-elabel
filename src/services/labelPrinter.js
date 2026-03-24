@@ -289,7 +289,8 @@ export const generateLabelPDF = async (rawLabel, options = {}) => {
 
   const W = options.widthMm || LABEL_W
   const M = MARGIN
-  const CW = W - M * 2                             // total content width
+  const TEXT_BUFFER = 2                              // safety buffer: jsPDF underestimates text width
+  const CW = W - M * 2 - TEXT_BUFFER                // content width with safety margin
   const BC_W = barcodeImg ? BARCODE_COL_W : 0       // barcode column (0 if no barcode)
   const TW = CW - BC_W                              // text width (narrowed when barcode)
   const lang = label.language || 'it'
@@ -397,7 +398,7 @@ export const generateLabelPDF = async (rawLabel, options = {}) => {
 
   // Footer (QR/BoxIcon left + Avvertenze right)
   const footerWarnX = M + QR_SIZE + 2.5
-  const footerWarnW = W - M - footerWarnX
+  const footerWarnW = W - M - footerWarnX - 3  // 3mm safety buffer (jsPDF underestimates text width)
 
   tmp.setFontSize(FS.warn)
   let warnH = 0.5 + TH.warnH
@@ -441,7 +442,7 @@ export const generateLabelPDF = async (rawLabel, options = {}) => {
   if (pittogrammaData) {
     try {
       doc.addImage(pittogrammaData, 'PNG',
-        OX + W - M - PITTO_SIZE, OY + M + 1.0,
+        OX + W - M - PITTO_SIZE - 2.5, OY + M + 1.0,
         PITTO_SIZE, PITTO_SIZE)
     } catch (e) { console.warn('[LabelPrinter] Pittogramma error:', e) }
   }
@@ -593,7 +594,7 @@ export const generateLabelPDF = async (rawLabel, options = {}) => {
   // ── FOOTER: QR/Box icon (left) + Avvertenze (right) ──
   const qrY = OY + y + 0.8
   const wX = OX + M + QR_SIZE + 2.5
-  const wW = W - M - (M + QR_SIZE + 2.5)
+  const wW = W - M - (M + QR_SIZE + 2.5) - 3  // 3mm safety buffer
 
   // QR code or Box icon
   if (label._isBoxLabel && label._boxIconDataUrl) {
