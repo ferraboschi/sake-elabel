@@ -264,7 +264,6 @@ export function autoFillIngredients(ingredients) {
     if (val) {
       sourceText = val
       sourceLang = detectLanguage(val)
-      // If detected language differs from the key, that's fine — we use detected
       break
     }
   }
@@ -274,8 +273,19 @@ export function autoFillIngredients(ingredients) {
   const result = { ...ingredients }
 
   for (const lang of LANGS) {
-    // Skip if already has content
-    if (result[lang]?.trim()) continue
+    const existing = result[lang]?.trim()
+
+    if (existing) {
+      // LANGUAGE MISMATCH FIX: if a field contains text in the wrong language
+      // (e.g. Japanese text stored under the 'it' key by a Japanese supplier),
+      // detect and replace it with the correct translation.
+      const detectedLang = detectLanguage(existing)
+      if (detectedLang !== lang) {
+        const { text, translated } = translateIngredients(existing, lang, detectedLang)
+        if (translated && text) result[lang] = text
+      }
+      continue
+    }
 
     const { text } = translateIngredients(sourceText, lang, sourceLang)
     if (text) result[lang] = text
