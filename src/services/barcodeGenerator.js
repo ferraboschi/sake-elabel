@@ -128,8 +128,8 @@ export function generateVerticalBarcodePdfDataUrl(ean) {
 
     JsBarcode(srcCanvas, clean, {
       format: fmt,
-      width: fmt === 'ITF14' ? 5 : 4,   // ITF-14 needs wider bars
-      height: fmt === 'ITF14' ? 120 : 100,
+      width: fmt === 'ITF14' ? 6 : 5,   // wider bars for readability after rotation
+      height: fmt === 'ITF14' ? 130 : 110,
       displayValue: true,
       fontSize: 24,       // large font for crisp numbers after rotation
       font: 'monospace',  // monospace for clean digit rendering

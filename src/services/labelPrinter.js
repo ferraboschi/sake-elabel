@@ -282,7 +282,7 @@ export const generateLabelPDF = async (rawLabel, options = {}) => {
   const M = 2.5
   const CW = W - M * 2  // 50mm content width
   // Barcode column: when barcode present, reserve space on the right
-  const BARCODE_COL_W = barcodeImg ? 12 : 0  // 12mm column for barcode
+  const BARCODE_COL_W = barcodeImg ? 13 : 0  // 13mm column for barcode
   const CW_BC = CW - BARCODE_COL_W  // narrowed content width when barcode present
   const lang = label.language || 'it'
   const t = TRANSLATIONS[lang] || TRANSLATIONS.it
@@ -396,6 +396,14 @@ export const generateLabelPDF = async (rawLabel, options = {}) => {
 
   // -- end barcode column --
   cy += 0.8  // origin section to footer
+  // Enforce minimum barcode column height so barcode is never squished
+  if (barcodeImg) {
+    const bcColH = cy - bcStartY
+    const MIN_BC_COL_H = 30  // minimum 30mm for readable barcode
+    if (bcColH < MIN_BC_COL_H) {
+      cy += (MIN_BC_COL_H - bcColH)
+    }
+  }
   const bcEndY = cy  // track where barcode column ends
 
   // -- Footer (QR + Avvertenze) --
@@ -596,6 +604,14 @@ export const generateLabelPDF = async (rawLabel, options = {}) => {
 
   // --- end of barcode column ---
   y += 0.8
+  // Enforce minimum barcode column height (same as Phase 1)
+  if (barcodeImg) {
+    const renderBcColH = y - renderBcStartY
+    const MIN_BC_COL_H = 30
+    if (renderBcColH < MIN_BC_COL_H) {
+      y += (MIN_BC_COL_H - renderBcColH)
+    }
+  }
   const renderBcEndY = y  // barcode column ends here
 
   // --- EAN Barcode (right column, pre-rotated vertical image) ---
@@ -607,9 +623,7 @@ export const generateLabelPDF = async (rawLabel, options = {}) => {
       const bcW = BARCODE_COL_W - 1  // image width in mm
       // Maintain aspect ratio from the pre-rotated image
       const aspect = barcodeImg.height / barcodeImg.width  // rotated: width=srcH, height=srcW
-      let bcH = bcW * aspect
-      // Clamp to available height
-      if (bcH > bcAvailH) bcH = bcAvailH
+      const bcH = bcW * aspect  // never compress — minimum height is guaranteed
       // Center vertically in the available space
       const bcY = OY + renderBcStartY + 1 + (bcAvailH - bcH) / 2
       doc.addImage(barcodeImg.dataUrl, 'PNG', bcX, bcY, bcW, bcH)
