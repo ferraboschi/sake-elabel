@@ -45,6 +45,55 @@ const INGREDIENT_SUGGESTIONS = {
     it: 'Riso, koji (Aspergillus oryzae), acqua, alcol distillato',
     jp: '米、米麹、水、醸造アルコール',
   },
+  // Fruit sake / liqueur suggestions keyed by fruit keyword
+  umeshu: {
+    it: 'Alcol puro, prugne ume, zucchero',
+    jp: '醸造アルコール、梅、砂糖',
+  },
+  yuzu: {
+    it: 'Sake, succo di yuzu, fruttosio',
+    jp: '日本酒、柚子果汁、果糖',
+  },
+  peach: {
+    it: 'Sake, succo di pesca, fruttosio',
+    jp: '日本酒、桃果汁、果糖',
+  },
+  mango: {
+    it: 'Sake, succo di mango, fruttosio',
+    jp: '日本酒、マンゴー果汁、果糖',
+  },
+  strawberry: {
+    it: 'Sake, succo di fragola, fruttosio',
+    jp: '日本酒、いちご果汁、果糖',
+  },
+  pear: {
+    it: 'Sake, succo di pera, fruttosio',
+    jp: '日本酒、梨果汁、果糖',
+  },
+  grape: {
+    it: 'Sake, succo di uva, fruttosio',
+    jp: '日本酒、ぶどう果汁、果糖',
+  },
+  melon: {
+    it: 'Sake, succo di melone, fruttosio',
+    jp: '日本酒、メロン果汁、果糖',
+  },
+  ginger: {
+    it: 'Sake, zenzero, zucchero',
+    jp: '日本酒、生姜、砂糖',
+  },
+  matcha: {
+    it: 'Sake, matcha, zucchero',
+    jp: '日本酒、抹茶、砂糖',
+  },
+  sakura: {
+    it: 'Sake, fiore di ciliegio, zucchero',
+    jp: '日本酒、桜、砂糖',
+  },
+  genericFruit: {
+    it: 'Sake, frutta, fruttosio',
+    jp: '日本酒、果実、果糖',
+  },
 }
 
 // IT↔JP ingredient translation map
@@ -93,11 +142,41 @@ function isJunmai(category) {
   return null // not sake (e.g., umeshu, liqueur) — no suggestion
 }
 
-function getIngredientSuggestion(category, lang) {
+function getIngredientSuggestion(category, lang, productName) {
   const junmai = isJunmai(category)
   if (junmai === true) return INGREDIENT_SUGGESTIONS.junmai[lang] || ''
   if (junmai === false) return INGREDIENT_SUGGESTIONS.nonJunmai[lang] || ''
-  return '' // no suggestion for non-sake
+
+  // Fruit Sake / Liqueur: detect fruit from product name or category
+  const isFruit = /fruit|frutti|liqueur|liquore/i.test(category || '')
+  const nameLower = (productName || '').toLowerCase()
+  const catLower = (category || '').toLowerCase()
+  if (isFruit || catLower.includes('umeshu') || catLower.includes('yuzushu')
+      || /umeshu|yuzu|peach|mango|strawberry|pear|grape|melon|ginger|matcha|sakura/i.test(nameLower)) {
+    // Detect specific fruit
+    const FRUIT_MAP = [
+      { keywords: ['umeshu', 'ume '], key: 'umeshu' },
+      { keywords: ['yuzu'], key: 'yuzu' },
+      { keywords: ['peach', 'momo', 'momoko', 'pesca'], key: 'peach' },
+      { keywords: ['mango'], key: 'mango' },
+      { keywords: ['strawberry', 'ichigo', 'fragola'], key: 'strawberry' },
+      { keywords: ['pear', 'nashi', 'pera'], key: 'pear' },
+      { keywords: ['grape', 'uva'], key: 'grape' },
+      { keywords: ['melon'], key: 'melon' },
+      { keywords: ['ginger', 'zenzero'], key: 'ginger' },
+      { keywords: ['matcha'], key: 'matcha' },
+      { keywords: ['sakura', 'cherry', 'ciliegio'], key: 'sakura' },
+    ]
+    for (const rule of FRUIT_MAP) {
+      if (rule.keywords.some(kw => nameLower.includes(kw) || catLower.includes(kw))) {
+        return INGREDIENT_SUGGESTIONS[rule.key]?.[lang] || ''
+      }
+    }
+    // Generic fruit sake fallback
+    if (isFruit) return INGREDIENT_SUGGESTIONS.genericFruit[lang] || ''
+  }
+
+  return '' // no suggestion
 }
 
 const T = {
@@ -343,7 +422,12 @@ export default function SupplierPortal() {
     return [...map.entries()].map(([en, jp]) => ({ en, jp })).sort((a, b) => a.en.localeCompare(b.en))
   }, [beverageProducts])
 
-  const hasData = (p) => p.nutrition?.energy_kj != null && p.nutrition?.energy_kj !== ''
+  // A product is "complete" only when it has both alcohol AND ingredients
+  const hasData = (p) => {
+    const hasAlcohol = p.alcoholPct != null && p.alcoholPct !== '' && parseFloat(p.alcoholPct) > 0
+    const hasIngredients = !!(p.ingredients?.it || '').trim()
+    return hasAlcohol && hasIngredients
+  }
 
   // Filter groups
   const filteredGroups = useMemo(() => {
@@ -628,10 +712,10 @@ export default function SupplierPortal() {
     setSaved(prev => ({ ...prev, ...newSaved }))
   }
 
-  const applySuggestion = (groupKey, category) => {
+  const applySuggestion = (groupKey, category, productName) => {
     const suggestion = lang === 'jp'
-      ? getIngredientSuggestion(category, 'jp')
-      : getIngredientSuggestion(category, 'it')
+      ? getIngredientSuggestion(category, 'jp', productName)
+      : getIngredientSuggestion(category, 'it', productName)
     if (suggestion) {
       updateField(groupKey, 'ingredientsIt', suggestion)
     }
@@ -860,7 +944,7 @@ export default function SupplierPortal() {
             const isCopySource = copySource === group.key
             const hasSiblings = group.items.length > 1
             const category = product.category || ''
-            const suggestion = getIngredientSuggestion(category, lang === 'jp' ? 'jp' : 'it')
+            const suggestion = getIngredientSuggestion(category, lang === 'jp' ? 'jp' : 'it', product.name)
             const currentIngredients = values.ingredientsIt || ''
 
             const bg = isCopySource ? '#fff8e1' : isSaved ? '#e8f5e9' : '#fff'
@@ -976,7 +1060,7 @@ export default function SupplierPortal() {
                         {t.ingredientsLabel}
                       </label>
                       {suggestion && !currentIngredients && (
-                        <button onClick={() => applySuggestion(group.key, category)}
+                        <button onClick={() => applySuggestion(group.key, category, product.name)}
                           style={{
                             padding: '2px 10px', fontSize: '11px', fontWeight: 600,
                             background: '#e8f5e9', color: '#2e7d32', border: '1px solid #c8e6c9',
