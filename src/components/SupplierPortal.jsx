@@ -1104,7 +1104,7 @@ export default function SupplierPortal() {
                     {t.logisticsTitle}
                   </div>
 
-                  {/* Per-size row: Size + Bottles + EAN Bottle + EAN Box + Print buttons */}
+                  {/* Per-size logistics rows */}
                   {group.items.map(item => {
                     const itemHasAlcohol = (values.alcoholPct !== '' && parseFloat(values.alcoholPct) > 0) || (item.alcoholPct > 0)
                     const itemHasIngredients = (values.ingredientsIt || '').trim().length > 0 || !!(item.ingredients?.it || '').trim()
@@ -1114,80 +1114,52 @@ export default function SupplierPortal() {
                     const itemIsPrintingBox = printingBoxGroup === item._recordId
                     return (
                     <div key={item._recordId} style={{
-                      background: '#fff', borderRadius: '6px', padding: '8px 10px', marginBottom: '4px',
+                      background: '#fff', borderRadius: '8px', padding: '10px 14px', marginBottom: '6px',
                       border: '1px solid #e0e0e0',
                     }}>
-                      {/* Top row: size + fields */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                        <span style={{ fontSize: '11px', fontWeight: 700, color: '#444', minWidth: '70px' }}>
+                      {/* Row 1: Volume badge + Bottles per box + Print buttons */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
+                        <span style={{
+                          fontSize: '13px', fontWeight: 700, color: '#283593',
+                          background: '#c5cae9', borderRadius: '4px', padding: '2px 10px',
+                          minWidth: '70px', textAlign: 'center',
+                        }}>
                           {item.volumeMl}ml
                         </span>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                          <span style={{ fontSize: '9px', color: '#5c6bc0', fontWeight: 600 }}>
-                            {lang === 'jp' ? '本数' : 'n°'}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span style={{ fontSize: '11px', color: '#5c6bc0', fontWeight: 600 }}>
+                            {lang === 'jp' ? '本数/箱' : 'Bottiglie/box'}
                           </span>
                           <input type="text" inputMode="numeric" placeholder="6"
                             value={getBottlesPerBoxValue(item)}
                             onChange={e => updateBottlesPerBox(item._recordId, e.target.value)}
                             style={{
-                              padding: '3px 6px', fontSize: '12px', border: '1px solid #c5cae9',
-                              borderRadius: '5px', width: '40px', textAlign: 'center', fontFamily: 'monospace',
+                              padding: '4px 8px', fontSize: '13px', border: '1px solid #c5cae9',
+                              borderRadius: '5px', width: '48px', textAlign: 'center', fontFamily: 'monospace',
                               background: '#fff',
                             }}
                           />
                         </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                          <span style={{ fontSize: '9px', color: '#5c6bc0', fontWeight: 600 }}>EAN</span>
-                          <input type="text" inputMode="numeric"
-                            placeholder={t.eanBottlePlaceholder}
-                            value={getEanValue(item)}
-                            onChange={e => updateEan(item._recordId, e.target.value)}
-                            style={{
-                              padding: '3px 6px', fontSize: '11px', border: '1px solid #ddd',
-                              borderRadius: '5px', width: '130px', fontFamily: 'monospace',
-                              background: getEanValue(item) ? '#f0f7ff' : '#fff',
-                            }}
-                          />
-                          {getEanValue(item) && getEanValue(item).length === 13 && (
-                            <span style={{ fontSize: '10px', color: '#2e7d32' }}>✓</span>
-                          )}
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                          <span style={{ fontSize: '9px', color: '#5c6bc0', fontWeight: 600 }}>BOX</span>
-                          <input type="text" inputMode="numeric"
-                            placeholder={t.eanBoxPlaceholder}
-                            value={getEanBoxValue(item)}
-                            onChange={e => updateEanBox(item._recordId, e.target.value)}
-                            style={{
-                              padding: '3px 6px', fontSize: '11px', border: '1px solid #ddd',
-                              borderRadius: '5px', width: '140px', fontFamily: 'monospace',
-                              background: getEanBoxValue(item) ? '#fff8e1' : '#fff',
-                            }}
-                          />
-                          {getEanBoxValue(item) && (getEanBoxValue(item).length === 13 || getEanBoxValue(item).length === 14) && (
-                            <span style={{ fontSize: '9px', color: '#2e7d32' }}>
-                              ✓{getEanBoxValue(item).length === 14 ? 'ITF' : ''}
-                            </span>
-                          )}
-                        </div>
-                        {/* Print buttons */}
+                        {/* Print buttons - right aligned */}
                         {itemCanPrint && (
-                          <div style={{ display: 'flex', gap: '4px', marginLeft: 'auto' }}>
+                          <div style={{ display: 'flex', gap: '6px', marginLeft: 'auto' }}>
                             <button onClick={() => handlePrintLabel(item)} disabled={itemIsPrinting}
+                              title={lang === 'jp' ? 'ラベル印刷' : 'Stampa etichetta'}
                               style={{
-                                padding: '3px 10px', fontSize: '11px', fontWeight: 600,
+                                padding: '4px 12px', fontSize: '13px', fontWeight: 600,
                                 background: itemIsPrinting ? '#ccc' : '#7b1fa2',
-                                color: '#fff', border: 'none', borderRadius: '5px',
+                                color: '#fff', border: 'none', borderRadius: '6px',
                                 cursor: itemIsPrinting ? 'default' : 'pointer', whiteSpace: 'nowrap',
                               }}>
                               {itemIsPrinting ? '...' : '🖨️'}
                             </button>
                             {itemHasBoxEan && (
                               <button onClick={() => handlePrintBox(item)} disabled={itemIsPrintingBox}
+                                title={lang === 'jp' ? 'ボックスラベル印刷' : 'Stampa box'}
                                 style={{
-                                  padding: '3px 10px', fontSize: '11px', fontWeight: 600,
+                                  padding: '4px 12px', fontSize: '13px', fontWeight: 600,
                                   background: itemIsPrintingBox ? '#ccc' : '#e65100',
-                                  color: '#fff', border: 'none', borderRadius: '5px',
+                                  color: '#fff', border: 'none', borderRadius: '6px',
                                   cursor: itemIsPrintingBox ? 'default' : 'pointer', whiteSpace: 'nowrap',
                                 }}>
                                 {itemIsPrintingBox ? '...' : '📦'}
@@ -1195,6 +1167,49 @@ export default function SupplierPortal() {
                             )}
                           </div>
                         )}
+                      </div>
+                      {/* Row 2: EAN fields with clear labels */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span style={{ fontSize: '11px', color: '#5c6bc0', fontWeight: 600, minWidth: '72px' }}>
+                            EAN {lang === 'jp' ? 'ボトル' : 'Bottiglia'}
+                          </span>
+                          <input type="text" inputMode="numeric"
+                            placeholder={t.eanBottlePlaceholder}
+                            value={getEanValue(item)}
+                            onChange={e => updateEan(item._recordId, e.target.value)}
+                            style={{
+                              padding: '5px 8px', fontSize: '13px', border: '1px solid #c5cae9',
+                              borderRadius: '5px', width: '155px', fontFamily: 'monospace',
+                              background: getEanValue(item) ? '#f0f7ff' : '#fff',
+                              letterSpacing: '0.5px',
+                            }}
+                          />
+                          {getEanValue(item) && getEanValue(item).length === 13 && (
+                            <span style={{ fontSize: '12px', color: '#2e7d32', fontWeight: 600 }}>✓</span>
+                          )}
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span style={{ fontSize: '11px', color: '#e65100', fontWeight: 600, minWidth: '72px' }}>
+                            EAN/ITF Box
+                          </span>
+                          <input type="text" inputMode="numeric"
+                            placeholder={t.eanBoxPlaceholder}
+                            value={getEanBoxValue(item)}
+                            onChange={e => updateEanBox(item._recordId, e.target.value)}
+                            style={{
+                              padding: '5px 8px', fontSize: '13px', border: '1px solid #ffcc80',
+                              borderRadius: '5px', width: '165px', fontFamily: 'monospace',
+                              background: getEanBoxValue(item) ? '#fff8e1' : '#fff',
+                              letterSpacing: '0.5px',
+                            }}
+                          />
+                          {getEanBoxValue(item) && (getEanBoxValue(item).length === 13 || getEanBoxValue(item).length === 14) && (
+                            <span style={{ fontSize: '11px', color: '#2e7d32', fontWeight: 600 }}>
+                              ✓ {getEanBoxValue(item).length === 14 ? 'ITF-14' : 'EAN-13'}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
                     )
