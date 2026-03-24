@@ -292,8 +292,8 @@ export const generateLabelPDF = async (rawLabel, options = {}) => {
   const M = MARGIN
   const TEXT_BUFFER = 3                              // safety buffer: jsPDF underestimates text width
   const CW = W - M * 2 - TEXT_BUFFER                // content width with safety margin
-  const BC_W = barcodeImg ? BARCODE_COL_W : 0       // barcode column (0 if no barcode)
-  const TW = CW - BC_W                              // text width (narrowed when barcode)
+  const BC_W = BARCODE_COL_W                         // ALWAYS reserve barcode column — layout identical with or without EAN
+  const TW = CW - BC_W                              // text width (always narrowed to keep layout consistent)
   const lang = label.language || 'it'
   const t = TRANSLATIONS[lang] || TRANSLATIONS.it
   const descText = label.legalDescription || t.desc
