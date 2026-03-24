@@ -154,6 +154,13 @@ const T = {
     printing: 'Generando...',
     lastSaved: 'Ultimo salvataggio',
     printDone: 'Etichetta scaricata',
+    logisticsTitle: '📦 Logistica',
+    eanBottle: 'EAN Bottiglia',
+    eanBox: 'EAN Box / ITF-14',
+    bottlesPerBox: 'Bottiglie per cartone',
+    eanBottlePlaceholder: 'EAN 13 cifre',
+    eanBoxPlaceholder: 'EAN 13 o ITF-14 (14 cifre)',
+    eanBoxNote: 'Il codice box può essere EAN-13 (13 cifre) o ITF-14 (14 cifre, stampato sulla scatola dal produttore giapponese)',
   },
   jp: {
     title: '仕入先ポータル — 栄養成分',
@@ -208,6 +215,13 @@ const T = {
     printing: '生成中...',
     lastSaved: '最終保存',
     printDone: 'ダウンロード済み',
+    logisticsTitle: '📦 物流情報',
+    eanBottle: 'EANボトル',
+    eanBox: 'EAN Box / ITF-14',
+    bottlesPerBox: '箱入り本数',
+    eanBottlePlaceholder: 'EAN 13桁',
+    eanBoxPlaceholder: 'EAN 13桁 or ITF-14 (14桁)',
+    eanBoxNote: 'ケースコードはEAN-13(13桁)またはITF-14(14桁、蔵元が箱に印刷)のいずれか',
   },
 }
 
@@ -385,6 +399,7 @@ export default function SupplierPortal() {
   // EAN edit data is per-product (not per-group, since each size has its own EAN)
   const [eanEditData, setEanEditData] = useState({})
   const [eanBoxEditData, setEanBoxEditData] = useState({})
+  const [bottlesPerBoxEditData, setBottlesPerBoxEditData] = useState({}) // groupKey → value
 
   const getEanValue = (product) => {
     if (eanEditData[product._recordId] !== undefined) return eanEditData[product._recordId]
@@ -396,6 +411,11 @@ export default function SupplierPortal() {
     return product.barcodeBox || ''
   }
 
+  const getBottlesPerBoxValue = (group) => {
+    if (bottlesPerBoxEditData[group.key] !== undefined) return bottlesPerBoxEditData[group.key]
+    return group.items[0].bottlesPerBox || ''
+  }
+
   const updateEan = (recordId, value) => {
     const clean = normalizeJapaneseInput(value, true)
     setEanEditData(prev => ({ ...prev, [recordId]: clean }))
@@ -404,6 +424,11 @@ export default function SupplierPortal() {
   const updateEanBox = (recordId, value) => {
     const clean = normalizeJapaneseInput(value, true)
     setEanBoxEditData(prev => ({ ...prev, [recordId]: clean }))
+  }
+
+  const updateBottlesPerBox = (groupKey, value) => {
+    const clean = normalizeJapaneseInput(value, true)
+    setBottlesPerBoxEditData(prev => ({ ...prev, [groupKey]: clean }))
   }
 
   const updateField = (groupKey, field, rawValue) => {
@@ -464,6 +489,12 @@ export default function SupplierPortal() {
       // Save alcohol directly as percentage (no conversion)
       if (!isNaN(alcoholVal) && alcoholVal >= 0) {
         payload.alcoholPct = alcoholVal
+      }
+
+      // Save bottles per box (same for all items in the group)
+      const bpbVal = bottlesPerBoxEditData[group.key]
+      if (bpbVal !== undefined && bpbVal !== '') {
+        payload.bottlesPerBox = parseInt(bpbVal, 10) || 0
       }
 
       // Save to ALL items in the group (all sizes)
@@ -848,75 +879,21 @@ export default function SupplierPortal() {
                       {lang === 'it' && product.wineryJp ? ` (${product.wineryJp})` : ''}
                       {category ? ` · ${category}` : ''}
                     </div>
-                    {/* Show all sizes in the group + EAN inputs (bottle + box) per size */}
-                    <div style={{ fontSize: '12px', color: '#555', marginTop: '4px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                      {group.items.map((item, i) => (
-                        <div key={item._recordId} style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-                          <span style={{
-                            display: 'inline-block', padding: '2px 8px', borderRadius: '10px',
-                            background: hasSiblings ? '#e3f2fd' : '#f5f5f5',
-                            border: hasSiblings ? '1px solid #bbdefb' : '1px solid #e0e0e0',
-                            fontSize: '11px', fontWeight: 600, alignSelf: 'flex-start',
-                          }}>
-                            {item.volumeMl}ml · {item.code}
-                          </span>
-                          {/* EAN Bottle */}
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', paddingLeft: '4px' }}>
-                            <span style={{ fontSize: '10px', color: '#888', minWidth: '55px' }}>
-                              {lang === 'jp' ? 'ボトル:' : 'Bottiglia:'}
-                            </span>
-                            <input
-                              type="text"
-                              inputMode="numeric"
-                              placeholder={lang === 'jp' ? 'EANボトル (13桁)' : 'EAN Bottiglia (13 cifre)'}
-                              value={getEanValue(item)}
-                              onChange={e => updateEan(item._recordId, e.target.value)}
-                              style={{
-                                padding: '3px 8px', fontSize: '12px', border: '1px solid #ddd',
-                                borderRadius: '6px', width: '155px', fontFamily: 'monospace',
-                                background: getEanValue(item) ? '#f0f7ff' : '#fff',
-                              }}
-                            />
-                            {getEanValue(item) && getEanValue(item).length === 13 && (
-                              <span style={{ fontSize: '11px', color: '#2e7d32' }}>✓</span>
-                            )}
-                            {getEanValue(item) && getEanValue(item).length > 0 && getEanValue(item).length !== 13 && (
-                              <span style={{ fontSize: '11px', color: '#e65100' }}>
-                                {lang === 'jp' ? '13桁必要' : '13 cifre'}
-                              </span>
-                            )}
-                          </div>
-                          {/* EAN Box */}
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', paddingLeft: '4px' }}>
-                            <span style={{ fontSize: '10px', color: '#888', minWidth: '55px' }}>
-                              {lang === 'jp' ? 'ボックス:' : 'Box:'}
-                            </span>
-                            <input
-                              type="text"
-                              inputMode="numeric"
-                              placeholder={lang === 'jp' ? 'EAN Box (13桁)' : 'EAN Box (13 cifre)'}
-                              value={getEanBoxValue(item)}
-                              onChange={e => updateEanBox(item._recordId, e.target.value)}
-                              style={{
-                                padding: '3px 8px', fontSize: '12px', border: '1px solid #ccc',
-                                borderRadius: '6px', width: '155px', fontFamily: 'monospace',
-                                background: getEanBoxValue(item) ? '#fff8e1' : '#fff',
-                              }}
-                            />
-                            {getEanBoxValue(item) && getEanBoxValue(item).length === 13 && (
-                              <span style={{ fontSize: '11px', color: '#2e7d32' }}>✓</span>
-                            )}
-                            {getEanBoxValue(item) && getEanBoxValue(item).length > 0 && getEanBoxValue(item).length !== 13 && (
-                              <span style={{ fontSize: '11px', color: '#e65100' }}>
-                                {lang === 'jp' ? '13桁必要' : '13 cifre'}
-                              </span>
-                            )}
-                          </div>
-                        </div>
+                    {/* Size badges only */}
+                    <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginTop: '4px' }}>
+                      {group.items.map(item => (
+                        <span key={item._recordId} style={{
+                          display: 'inline-block', padding: '2px 8px', borderRadius: '10px',
+                          background: hasSiblings ? '#e3f2fd' : '#f5f5f5',
+                          border: hasSiblings ? '1px solid #bbdefb' : '1px solid #e0e0e0',
+                          fontSize: '11px', fontWeight: 600,
+                        }}>
+                          {item.volumeMl}ml · {item.code}
+                        </span>
                       ))}
                       {hasSiblings && (
-                        <span style={{ fontSize: '11px', color: '#1565c0', fontStyle: 'italic' }}>
-                          {lang === 'jp' ? '一括入力（栄養成分・原材料）' : 'inserimento unico (nutrizione e ingredienti)'}
+                        <span style={{ fontSize: '11px', color: '#1565c0', fontStyle: 'italic', alignSelf: 'center' }}>
+                          {lang === 'jp' ? '一括入力' : 'inserimento unico'}
                         </span>
                       )}
                     </div>
@@ -1165,6 +1142,103 @@ export default function SupplierPortal() {
                         bg={isCopySource ? '#fff8e1' : isSaved ? '#e8f5e9' : '#fff'}
                       />
                     </div>
+                  </div>
+                </div>
+
+                {/* ====== SEZIONE 3: Logistica ====== */}
+                <div style={{
+                  background: '#e8eaf6', border: '1px solid #c5cae9', borderRadius: '8px',
+                  padding: '12px 14px',
+                }}>
+                  <div style={{ fontSize: '11px', fontWeight: 600, color: '#283593', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                    {t.logisticsTitle}
+                  </div>
+
+                  {/* Bottles per box (shared across all sizes) */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
+                    <label style={{ fontSize: '12px', color: '#555', fontWeight: 500, minWidth: '130px' }}>
+                      {t.bottlesPerBox}
+                    </label>
+                    <input
+                      type="text" inputMode="numeric"
+                      placeholder="6"
+                      value={getBottlesPerBoxValue(group)}
+                      onChange={e => updateBottlesPerBox(group.key, e.target.value)}
+                      style={{
+                        padding: '5px 8px', fontSize: '13px', border: '1px solid #c5cae9',
+                        borderRadius: '6px', width: '60px', textAlign: 'center', fontFamily: 'monospace',
+                        background: '#fff',
+                      }}
+                    />
+                  </div>
+
+                  {/* Per-size EAN codes */}
+                  {group.items.map(item => (
+                    <div key={item._recordId} style={{
+                      background: '#fff', borderRadius: '6px', padding: '8px 10px', marginBottom: '6px',
+                      border: '1px solid #e0e0e0',
+                    }}>
+                      <div style={{ fontSize: '11px', fontWeight: 600, color: '#444', marginBottom: '6px' }}>
+                        {item.volumeMl}ml · {item.code}
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
+                        {/* EAN Bottle */}
+                        <div>
+                          <label style={{ fontSize: '10px', color: '#888', display: 'block', marginBottom: '2px' }}>
+                            {t.eanBottle}
+                          </label>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <input
+                              type="text" inputMode="numeric"
+                              placeholder={t.eanBottlePlaceholder}
+                              value={getEanValue(item)}
+                              onChange={e => updateEan(item._recordId, e.target.value)}
+                              style={{
+                                padding: '4px 8px', fontSize: '12px', border: '1px solid #ddd',
+                                borderRadius: '6px', width: '145px', fontFamily: 'monospace',
+                                background: getEanValue(item) ? '#f0f7ff' : '#fff',
+                              }}
+                            />
+                            {getEanValue(item) && getEanValue(item).length === 13 && (
+                              <span style={{ fontSize: '11px', color: '#2e7d32' }}>✓</span>
+                            )}
+                            {getEanValue(item) && getEanValue(item).length > 0 && getEanValue(item).length !== 13 && (
+                              <span style={{ fontSize: '10px', color: '#e65100' }}>13</span>
+                            )}
+                          </div>
+                        </div>
+                        {/* EAN Box / ITF-14 */}
+                        <div>
+                          <label style={{ fontSize: '10px', color: '#888', display: 'block', marginBottom: '2px' }}>
+                            {t.eanBox}
+                          </label>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <input
+                              type="text" inputMode="numeric"
+                              placeholder={t.eanBoxPlaceholder}
+                              value={getEanBoxValue(item)}
+                              onChange={e => updateEanBox(item._recordId, e.target.value)}
+                              style={{
+                                padding: '4px 8px', fontSize: '12px', border: '1px solid #ddd',
+                                borderRadius: '6px', width: '155px', fontFamily: 'monospace',
+                                background: getEanBoxValue(item) ? '#fff8e1' : '#fff',
+                              }}
+                            />
+                            {getEanBoxValue(item) && (getEanBoxValue(item).length === 13 || getEanBoxValue(item).length === 14) && (
+                              <span style={{ fontSize: '11px', color: '#2e7d32' }}>
+                                ✓ {getEanBoxValue(item).length === 14 ? 'ITF' : 'EAN'}
+                              </span>
+                            )}
+                            {getEanBoxValue(item) && getEanBoxValue(item).length > 0 && getEanBoxValue(item).length !== 13 && getEanBoxValue(item).length !== 14 && (
+                              <span style={{ fontSize: '10px', color: '#e65100' }}>13/14</span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  <div style={{ fontSize: '10px', color: '#7986cb', marginTop: '4px', fontStyle: 'italic' }}>
+                    {t.eanBoxNote}
                   </div>
                 </div>
 

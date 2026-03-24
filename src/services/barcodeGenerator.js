@@ -25,6 +25,19 @@ export function isValidEAN13(code) {
 }
 
 /**
+ * Detect barcode format from code length
+ * @returns {'ITF14' | 'EAN13' | 'EAN8' | null}
+ */
+export function detectBarcodeFormat(code) {
+  if (!code) return null
+  const clean = String(code).replace(/\s/g, '')
+  if (/^\d{14}$/.test(clean)) return 'ITF14'
+  if (/^\d{13}$/.test(clean)) return 'EAN13'
+  if (/^\d{8}$/.test(clean)) return 'EAN8'
+  return null
+}
+
+/**
  * Generate a barcode PNG data URL from an EAN-13 code
  * Returns null if the code is invalid or generation fails
  *
@@ -35,15 +48,14 @@ export function isValidEAN13(code) {
 export function generateBarcodeDataUrl(ean, options = {}) {
   if (!ean) return null
   const clean = String(ean).replace(/\s/g, '')
-
-  // Accept EAN-13 (13 digits) or EAN-8 (8 digits)
-  if (!/^\d{8}$|^\d{13}$/.test(clean)) return null
+  const fmt = detectBarcodeFormat(clean)
+  if (!fmt) return null
 
   try {
     const canvas = document.createElement('canvas')
 
     JsBarcode(canvas, clean, {
-      format: clean.length === 13 ? 'EAN13' : 'EAN8',
+      format: fmt,
       width: 2,
       height: 60,
       displayValue: true,
@@ -71,15 +83,16 @@ export function generateBarcodeDataUrl(ean, options = {}) {
 export function generateBarcodePdfDataUrl(ean) {
   if (!ean) return null
   const clean = String(ean).replace(/\s/g, '')
-  if (!/^\d{8}$|^\d{13}$/.test(clean)) return null
+  const fmt = detectBarcodeFormat(clean)
+  if (!fmt) return null
 
   try {
     const canvas = document.createElement('canvas')
 
     JsBarcode(canvas, clean, {
-      format: clean.length === 13 ? 'EAN13' : 'EAN8',
-      width: 3,        // wider bars for higher DPI
-      height: 80,       // taller for readability
+      format: fmt,
+      width: fmt === 'ITF14' ? 4 : 3,  // ITF-14 needs wider bars for corrugated cardboard
+      height: fmt === 'ITF14' ? 100 : 80,
       displayValue: true,
       fontSize: 16,
       font: 'helvetica',
@@ -106,16 +119,17 @@ export function generateBarcodePdfDataUrl(ean) {
 export function generateVerticalBarcodePdfDataUrl(ean) {
   if (!ean) return null
   const clean = String(ean).replace(/\s/g, '')
-  if (!/^\d{8}$|^\d{13}$/.test(clean)) return null
+  const fmt = detectBarcodeFormat(clean)
+  if (!fmt) return null
 
   try {
     // Step 1: Generate barcode at high resolution for crisp text
     const srcCanvas = document.createElement('canvas')
 
     JsBarcode(srcCanvas, clean, {
-      format: clean.length === 13 ? 'EAN13' : 'EAN8',
-      width: 4,          // wider bars for high-res
-      height: 100,        // taller for readability
+      format: fmt,
+      width: fmt === 'ITF14' ? 5 : 4,   // ITF-14 needs wider bars
+      height: fmt === 'ITF14' ? 120 : 100,
       displayValue: true,
       fontSize: 24,       // large font for crisp numbers after rotation
       font: 'monospace',  // monospace for clean digit rendering
@@ -148,4 +162,4 @@ export function generateVerticalBarcodePdfDataUrl(ean) {
   }
 }
 
-export default { isValidEAN13, generateBarcodeDataUrl, generateBarcodePdfDataUrl, generateVerticalBarcodePdfDataUrl }
+export default { isValidEAN13, detectBarcodeFormat, generateBarcodeDataUrl, generateBarcodePdfDataUrl, generateVerticalBarcodePdfDataUrl }
