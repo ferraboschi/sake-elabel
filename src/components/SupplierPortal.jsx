@@ -925,7 +925,10 @@ export default function SupplierPortal() {
                     const groupSavedAt = savedAt[group.key]
                     const hasAlcohol = values.alcoholPct !== '' && values.alcoholPct != null && parseFloat(values.alcoholPct) > 0
                     const hasIngredients = (values.ingredientsIt || '').trim().length > 0
-                    const canPrint = isSaved && hasAlcohol && hasIngredients
+                    const productHasAlcohol = product.alcoholPct != null && product.alcoholPct > 0
+                    const productHasIngredients = !!(product.ingredients?.it || '').trim()
+                    const dataInDb = productHasAlcohol && productHasIngredients
+                    const canPrint = (isSaved || dataInDb) && hasAlcohol && hasIngredients
                     const isPrinting = printingGroup === group.key
                     return (
                       <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
