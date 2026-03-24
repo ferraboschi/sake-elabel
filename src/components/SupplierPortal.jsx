@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { fetchProducts, updateProduct, isAirtableConfigured } from '../services/airtable'
-import { translateIngredients as autoTranslateIngredients } from '../services/ingredientTranslator'
+import { translateIngredients as autoTranslateIngredients, autoFillIngredients } from '../services/ingredientTranslator'
+import { useGenerateLabel } from '../hooks/useGenerateLabel'
 
 const VALID_TOKENS = ['sake2026supplier', 'fornitore2026', 'supplier2026']
 
@@ -147,6 +148,10 @@ const T = {
     completed: 'completati',
     remaining: 'da fare',
     of: 'di',
+    printLabel: 'Stampa etichetta',
+    printing: 'Generando...',
+    lastSaved: 'Ultimo salvataggio',
+    printDone: 'Etichetta scaricata',
   },
   jp: {
     title: '仕入先ポータル — 栄養成分',
@@ -196,6 +201,10 @@ const T = {
     completed: '完了',
     remaining: '残り',
     of: '/',
+    printLabel: 'ラベル印刷',
+    printing: '生成中...',
+    lastSaved: '最終保存',
+    printDone: 'ダウンロード済み',
   },
 }
 
@@ -265,6 +274,9 @@ export default function SupplierPortal() {
   const [confirmed, setConfirmed] = useState({})
   const [statusFilter, setStatusFilter] = useState('todo') // 'all' | 'todo' | 'done'
   const [copySource, setCopySource] = useState(null) // groupKey
+  const [savedAt, setSavedAt] = useState({}) // groupKey → Date
+  const [printingGroup, setPrintingGroup] = useState(null)
+  const { generate, generating: generatingLabel } = useGenerateLabel()
   const [producerFilter, setProducerFilter] = useState(producerParam.replace(/[-_]/g, ' '))
   const [productFilter, setProductFilter] = useState('')
 
@@ -472,6 +484,7 @@ export default function SupplierPortal() {
         if (autoConfirm) confirmedState[p._recordId] = true
       })
       setSaved(prev => ({ ...prev, ...savedState }))
+      setSavedAt(prev => ({ ...prev, [group.key]: new Date() }))
       if (autoConfirm) setConfirmed(prev => ({ ...prev, ...confirmedState }))
     } catch (err) {
       alert(`${lang === 'jp' ? '保存エラー' : 'Errore salvataggio'} ${items[0].name}: ${err.message}`)
@@ -484,6 +497,31 @@ export default function SupplierPortal() {
 
   const saveAndConfirm = (group) => saveGroup(group, true)
   const saveAll = async () => { for (const g of filteredGroups) await saveGroup(g) }
+
+  const handlePrintLabel = async (group) => {
+    const product = group.items[0]
+    setPrintingGroup(group.key)
+    try {
+      // Reload products to get fresh data after save
+      const allProducts = await fetchProducts()
+      const freshProduct = allProducts.find(p => p.slug === product.slug) || product
+      const filledProduct = {
+        ...freshProduct,
+        ingredients: autoFillIngredients(freshProduct.ingredients),
+        allergens: autoFillIngredients(freshProduct.allergens),
+      }
+      await generate([filledProduct], {
+        selectedLanguage: 'it',
+        selectedCountry: 'Italia',
+        importer: null,
+      })
+    } catch (err) {
+      console.error('Print label failed:', err)
+      alert(`Errore stampa: ${err.message}`)
+    } finally {
+      setPrintingGroup(null)
+    }
+  }
 
   const startCopy = (groupKey) => setCopySource(copySource === groupKey ? null : groupKey)
   const pasteValues = (targetGroupKey) => {
@@ -881,6 +919,37 @@ export default function SupplierPortal() {
                       {isSaving ? t.saving : isSaved ? t.saved : t.save}
                     </button>
                   </div>
+
+                  {/* Last save date + Print label button */}
+                  {(() => {
+                    const groupSavedAt = savedAt[group.key]
+                    const hasAlcohol = values.alcoholPct !== '' && values.alcoholPct != null && parseFloat(values.alcoholPct) > 0
+                    const hasIngredients = (values.ingredientsIt || '').trim().length > 0
+                    const canPrint = isSaved && hasAlcohol && hasIngredients
+                    const isPrinting = printingGroup === group.key
+                    return (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                        {groupSavedAt && (
+                          <span style={{ fontSize: '11px', color: '#888' }}>
+                            {t.lastSaved}: {groupSavedAt.toLocaleTimeString(lang === 'jp' ? 'ja-JP' : 'it-IT', { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        )}
+                        {canPrint && (
+                          <button
+                            onClick={() => handlePrintLabel(group)}
+                            disabled={isPrinting}
+                            style={{
+                              padding: '5px 14px', fontSize: '12px', fontWeight: 600,
+                              background: isPrinting ? '#ccc' : '#7b1fa2',
+                              color: '#fff', border: 'none', borderRadius: '6px',
+                              cursor: isPrinting ? 'default' : 'pointer',
+                            }}>
+                            {isPrinting ? t.printing : `🖨️ ${t.printLabel}`}
+                          </button>
+                        )}
+                      </div>
+                    )
+                  })()}
                 </div>
 
                 {/* ====== SEZIONE 1: Dati etichetta fisica (obbligatori) ====== */}
