@@ -252,6 +252,7 @@ function normalizeLabel(raw) {
     legalDescription: raw.legalDescription || '',
     ingredients: raw.ingredients || null,
     allergens: raw.allergens || null,
+    bottlesPerBox: raw.bottlesPerBox || null,
   }
 }
 
@@ -472,11 +473,15 @@ export const generateLabelPDF = async (rawLabel, options = {}) => {
   txt(nameR, titleStyle.bl)
   y += nameR.length * titleStyle.ls
 
-  // --- Category ---
+  // --- Category (+ bottles per box for box labels) ---
   if (label.category) {
     doc.setTextColor(100)
     hFont(F.subtitle, 'italic')
-    txt(label.category, BL.body)
+    let categoryLine = label.category
+    if (label._isBoxLabel && label.bottlesPerBox) {
+      categoryLine += ` · ${label.bottlesPerBox} ${label.bottlesPerBox === 1 ? 'bottiglia' : 'bottiglie'}`
+    }
+    txt(categoryLine, BL.body)
     y += TH.body
     doc.setTextColor(0)
   }
@@ -780,7 +785,7 @@ export const downloadBoxLabelPDF = async (rawLabel, options) => {
   if (!boxIconDataUrl) boxIconDataUrl = generateBoxIconDataUrl(300)
   const boxLabel = {
     ...label,
-    barcode: label.barcodeBox || label.barcode,  // use box EAN
+    barcode: label.barcodeBox || null,  // only use box EAN, no fallback to bottle
     _isBoxLabel: true,
     _boxIconDataUrl: boxIconDataUrl,
   }

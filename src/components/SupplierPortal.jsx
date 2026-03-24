@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { fetchProducts, updateProduct, isAirtableConfigured } from '../services/airtable'
 import { translateIngredients as autoTranslateIngredients, autoFillIngredients } from '../services/ingredientTranslator'
 import { useGenerateLabel } from '../hooks/useGenerateLabel'
+import { downloadBoxLabelPDF } from '../services/labelPrinter'
 
 const VALID_TOKENS = ['sake2026supplier', 'fornitore2026', 'supplier2026']
 
@@ -149,6 +150,7 @@ const T = {
     remaining: 'da fare',
     of: 'di',
     printLabel: 'Stampa etichetta',
+    printBox: 'Stampa box',
     printing: 'Generando...',
     lastSaved: 'Ultimo salvataggio',
     printDone: 'Etichetta scaricata',
@@ -202,6 +204,7 @@ const T = {
     remaining: '残り',
     of: '/',
     printLabel: 'ラベル印刷',
+    printBox: 'ボックス印刷',
     printing: '生成中...',
     lastSaved: '最終保存',
     printDone: 'ダウンロード済み',
@@ -276,7 +279,8 @@ export default function SupplierPortal() {
   const [copySource, setCopySource] = useState(null) // groupKey
   const [savedAt, setSavedAt] = useState({}) // groupKey → Date
   const [printingGroup, setPrintingGroup] = useState(null)
-  const { generate, generating: generatingLabel } = useGenerateLabel()
+  const [printingBoxGroup, setPrintingBoxGroup] = useState(null)
+  const { generate, generating: generatingLabel, generateQR } = useGenerateLabel()
   const [producerFilter, setProducerFilter] = useState(producerParam.replace(/[-_]/g, ' '))
   const [productFilter, setProductFilter] = useState('')
 
@@ -520,6 +524,35 @@ export default function SupplierPortal() {
       alert(`Errore stampa: ${err.message}`)
     } finally {
       setPrintingGroup(null)
+    }
+  }
+
+  const handlePrintBox = async (group) => {
+    const product = group.items[0]
+    setPrintingBoxGroup(group.key)
+    try {
+      const allProducts = await fetchProducts()
+      const freshProduct = allProducts.find(p => p.slug === product.slug) || product
+      const filledProduct = {
+        ...freshProduct,
+        ingredients: autoFillIngredients(freshProduct.ingredients),
+        allergens: autoFillIngredients(freshProduct.allergens),
+      }
+      // Generate QR for the box label
+      const qr = await generateQR(filledProduct.slug, 'it', 'Italia')
+      const boxLabel = {
+        ...filledProduct,
+        qr,
+        language: 'it',
+        country: 'Italia',
+        importer: null,
+      }
+      await downloadBoxLabelPDF(boxLabel)
+    } catch (err) {
+      console.error('Print box failed:', err)
+      alert(`Errore stampa box: ${err.message}`)
+    } finally {
+      setPrintingBoxGroup(null)
     }
   }
 
@@ -950,6 +983,23 @@ export default function SupplierPortal() {
                             {isPrinting ? t.printing : `🖨️ ${t.printLabel}`}
                           </button>
                         )}
+                        {canPrint && (() => {
+                          const hasBoxEan = !!(product.barcodeBox || eanBoxEditData[product._recordId])
+                          const isPrintingBox = printingBoxGroup === group.key
+                          return hasBoxEan ? (
+                            <button
+                              onClick={() => handlePrintBox(group)}
+                              disabled={isPrintingBox}
+                              style={{
+                                padding: '5px 14px', fontSize: '12px', fontWeight: 600,
+                                background: isPrintingBox ? '#ccc' : '#e65100',
+                                color: '#fff', border: 'none', borderRadius: '6px',
+                                cursor: isPrintingBox ? 'default' : 'pointer',
+                              }}>
+                              {isPrintingBox ? t.printing : `📦 ${t.printBox}`}
+                            </button>
+                          ) : null
+                        })()}
                       </div>
                     )
                   })()}
@@ -1095,7 +1145,11 @@ export default function SupplierPortal() {
                     </div>
 
                     {/* Proteine + Sale side by side */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 16px' }}>
+                    <div style={{
+                      background: '#f8f9fa', borderRadius: '8px', padding: '8px 10px',
+                      borderLeft: '3px solid #ffcc80',
+                      display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 16px',
+                    }}>
                       <NutritionInput
                         label={lang === 'jp' ? 'たんぱく質' : 'Proteine'}
                         unit="g"
