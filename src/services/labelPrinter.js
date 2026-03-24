@@ -1,23 +1,48 @@
 /**
  * Label Printer Service — BACK LABEL (retro etichetta)
  *
- * EU Regulation 1169/2011 font requirements:
- *   - x-height >= 1.2mm (packaging > 80cm²)
- *   - x-height >= 0.9mm (packaging <= 80cm²)
+ * Rewritten from scratch to match the reference PDF design exactly.
  *
+ * REFERENCE DESIGN (both BOTTIGLIA and BOX):
+ * ┌─────────────────────────────────────────────┐
+ * │ PRODUCT NAME (bold)          [Pittogramma]  │
+ * │ Category (italic)                            │
+ * │─────────────────────────────────────────────│
+ * │ Legal description            ┌────────────┐ │
+ * │ Ingredienti: (bold)          │            │ │
+ * │ ingredient list              │  BARCODE   │ │
+ * │ Alcool: XX% Vol.             │  (vertical)│ │
+ * │ Contenuto: XXXml             │            │ │
+ * │─────────────────────────────│            │ │
+ * │ Prodotto e confezionato...   │            │ │
+ * │ Importato da: Company        │            │ │
+ * │ Address                      │            │ │
+ * │ sakecompany.com              └────────────┘ │
+ * │─────────────────────────────────────────────│
+ * │ [QR]  Avvertenze:                           │
+ * │ [QR]  warning text...                       │
+ * │ [QR]  Info nutrizionali nel QR              │
+ * │ Cod. XXXX    Lotto: vedi sulla confezione   │
+ * └─────────────────────────────────────────────┘
+ *
+ * BOTTLE vs BOX:
+ *   - BOTTLE: QR code in footer, bottle EAN barcode
+ *   - BOX: Box icon in footer (no QR), box EAN/ITF-14 barcode,
+ *           category line shows "· X bottiglie"
+ *
+ * EU Regulation 1169/2011: x-height >= 0.9mm for packages <= 80cm²
  * QR code: minimum 13×13mm (EU e-label requirement)
- * Target label: 55mm × dynamic height
- *
- * LAYOUT v3 — pixel-precise match to design PDF
- * All measurements extracted via PyMuPDF from S093-1800-hiyashibori-gold.pdf
+ * Label width: 55mm, height: dynamic
  */
 
 import { jsPDF } from 'jspdf'
 import { generateVerticalBarcodePdfDataUrl } from './barcodeGenerator'
 
-// ---- CJK Font Loader (Noto Sans JP) ----
-let cachedFontBase64 = null
+// ═══════════════════════════════════════════════════════
+// ASSET LOADERS (cached)
+// ═══════════════════════════════════════════════════════
 
+let cachedFontBase64 = null
 async function loadJapaneseFont() {
   if (cachedFontBase64) return cachedFontBase64
   try {
@@ -29,17 +54,14 @@ async function loadJapaneseFont() {
     let binary = ''
     for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i])
     cachedFontBase64 = btoa(binary)
-    console.log('[LabelPrinter] Noto Sans JP loaded')
     return cachedFontBase64
   } catch (err) {
-    console.warn('[LabelPrinter] CJK font unavailable, JP text may not render:', err.message)
+    console.warn('[LabelPrinter] CJK font unavailable:', err.message)
     return null
   }
 }
 
-// ---- Pittogramma Loader ----
 let cachedPittogramma = null
-
 async function loadPittogramma() {
   if (cachedPittogramma) return cachedPittogramma
   try {
@@ -51,7 +73,6 @@ async function loadPittogramma() {
     let binary = ''
     for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i])
     cachedPittogramma = 'data:image/png;base64,' + btoa(binary)
-    console.log('[LabelPrinter] Pittogramma loaded')
     return cachedPittogramma
   } catch (err) {
     console.warn('[LabelPrinter] Pittogramma unavailable:', err.message)
@@ -59,14 +80,11 @@ async function loadPittogramma() {
   }
 }
 
-// ---- Box Icon Loader ----
 let cachedBoxIcon = null
-
 async function loadBoxIcon() {
   if (cachedBoxIcon) return cachedBoxIcon
   try {
     const basePath = import.meta.env.BASE_URL || '/'
-    // Try JPG first (user-provided), then PNG (generated fallback)
     for (const ext of ['jpg', 'png']) {
       try {
         const res = await fetch(`${basePath}icons/BOX.${ext}`)
@@ -77,7 +95,6 @@ async function loadBoxIcon() {
         for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i])
         const mime = ext === 'jpg' ? 'image/jpeg' : 'image/png'
         cachedBoxIcon = `data:${mime};base64,` + btoa(binary)
-        console.log(`[LabelPrinter] Box icon loaded (${ext})`)
         return cachedBoxIcon
       } catch { continue }
     }
@@ -95,65 +112,67 @@ function registerJpFont(doc, fontBase64) {
   return true
 }
 
-// ============================================================
-// FONT SIZES — from design PDF (extracted via PyMuPDF)
-// EU Reg 1169/2011: x-height >= 0.9mm for packages <= 80cm²
-// Helvetica x-height ≈ 0.52 × font_size_mm
-//   5pt → x-height 0.92mm (borderline)
-//   5.5pt → x-height 1.01mm (safe)
-//   6pt → x-height 1.10mm (safe)
-// ============================================================
-const F = {
-  title: 8,         // Product name — Helvetica Bold (auto-reduced for long names)
-  subtitle: 6,      // Category — Helvetica Regular (italic in rendering)
-  ingHeader: 6.5,   // "Ingredienti:" — Helvetica Bold
-  body: 6,          // Body text — Helvetica Regular
-  warnHeader: 5.5,  // "Avvertenze:" — Helvetica Bold
-  warn: 5.5,        // Warning lines — min 5.5pt for legal compliance (x-height 1.01mm)
-  cod: 5.5,         // "Cod." — same minimum
+// ═══════════════════════════════════════════════════════
+// DESIGN CONSTANTS — extracted from reference PDF
+// ═══════════════════════════════════════════════════════
+
+// Font sizes (pt)
+const FS = {
+  title: 8,       // Product name — bold, auto-reduced for long names
+  category: 6,    // Category line — italic
+  ingHeader: 6.5, // "Ingredienti:" — bold
+  body: 6,        // Body text — regular
+  warnHeader: 5.5,// "Avvertenze:" — bold
+  warn: 5.5,      // Warning text — regular (EU min compliant)
+  cod: 5.5,       // Footer "Cod." line
 }
 
-// Title font sizes for adaptive scaling
+// Baseline offsets (distance from text top-edge to jsPDF baseline)
+const BL = {
+  title: 2.0,
+  body: 1.5,
+  ingH: 1.6,
+  warn: 1.35,
+  warnH: 1.4,
+}
+
+// Text heights (cap-height + descender per font size)
+const TH = {
+  title: 2.8,
+  body: 2.1,
+  ingH: 2.3,
+  warn: 1.94,
+  warnH: 1.94,
+}
+
+// Line spacing (top-to-top distance between consecutive lines)
+const LS = {
+  body: 2.5,
+  warn: 2.1,
+}
+
+// Adaptive title sizing (try largest first, fall back for long names)
 const TITLE_SIZES = [
-  { pt: 8,   bl: 2.0, th: 2.8, ls: 3.1 },   // default
-  { pt: 7,   bl: 1.75, th: 2.5, ls: 2.75 },  // 2-line fallback
-  { pt: 6.5, bl: 1.6, th: 2.3, ls: 2.55 },   // 3-line fallback
+  { pt: 8,   bl: 2.0, th: 2.8, ls: 3.1 },
+  { pt: 7,   bl: 1.75, th: 2.5, ls: 2.75 },
+  { pt: 6.5, bl: 1.6, th: 2.3, ls: 2.55 },
 ]
 
-// ============================================================
-// BASELINE OFFSETS — distance from text TOP to jsPDF baseline
-// These depend on font size (for Helvetica: ~ascender ratio 0.72)
-// ============================================================
-const BL = {
-  title: 2.0,    // 8pt (overridden by adaptive title)
-  body: 1.5,     // 6pt
-  ingH: 1.6,     // 6.5pt
-  warn: 1.35,    // 5.5pt (was 1.2 for 5pt)
-  warnH: 1.4,    // 5.5pt
-}
+// Layout dimensions (mm)
+const LABEL_W = 55          // label width
+const MARGIN = 2.5          // content margin
+const PITTO_SIZE = 6.1      // pittogramma icon
+const QR_SIZE = 13           // QR code (EU minimum)
+const BARCODE_COL_W = 12    // barcode column width
+const BLEED = 5             // bleed area for crop marks
 
-// ============================================================
-// TEXT HEIGHTS — approximate cap-height + descender for each size
-// ============================================================
-const TH = {
-  title: 2.8,    // 8pt (overridden by adaptive title)
-  body: 2.1,     // 6pt
-  ingH: 2.3,     // 6.5pt
-  warn: 1.94,    // 5.5pt (was 1.76 for 5pt)
-  warnH: 1.94,   // 5.5pt
-}
+// Separator line
+const SEP_LW = 0.20 * 0.3528 // 0.20pt → mm
+const SEP_COLOR = [190, 192, 194]
 
-// ============================================================
-// SEPARATOR — from design PDF
-// ============================================================
-const SEP_WIDTH_PT = 0.20  // line width in points
-const SEP_R = 190, SEP_G = 192, SEP_B = 194  // line color
-
-// ============================================================
-// LAYOUT — from design PDF
-// ============================================================
-const PITTO_SIZE = 6.1     // pittogramma icon 6.1×6.1mm
-const QR_SIZE = 13         // QR code 13×13mm (EU minimum compliant)
+// ═══════════════════════════════════════════════════════
+// TRANSLATIONS
+// ═══════════════════════════════════════════════════════
 
 const TRANSLATIONS = {
   it: {
@@ -228,26 +247,21 @@ const TRANSLATIONS = {
   },
 }
 
-/**
- * Normalize a label object so it works whether it comes directly from
- * useGenerateLabel (raw product fields) or from labelStore (stored format).
- * This mapping ensures downloadLabelPDF works from both the generator AND the archive.
- */
+// ═══════════════════════════════════════════════════════
+// NORMALIZE — maps raw product/store fields to uniform label obj
+// ═══════════════════════════════════════════════════════
+
 function normalizeLabel(raw) {
   return {
     ...raw,
-    // Core identifiers
     name: raw.name || raw.productName || '',
     code: raw.code || raw.productCode || '',
     slug: raw.slug || raw.productSlug || '',
-    // QR code data
     qr: raw.qr || raw.qrDataUrl || '',
-    // Importer (generator passes object, store flattens to strings)
     importer: raw.importer || (raw.importerName ? {
       name: raw.importerName,
       address: raw.importerAddress || '',
     } : null),
-    // Fields that may be missing from old stored labels
     countryOfOrigin: raw.countryOfOrigin || '',
     legalDescription: raw.legalDescription || '',
     ingredients: raw.ingredients || null,
@@ -256,15 +270,10 @@ function normalizeLabel(raw) {
   }
 }
 
-/**
- * Generate compact print-ready back label PDF (v3 — pixel-precise)
- *
- * y cursor tracks the TOP EDGE of where the next element will be placed.
- * Text is drawn at y + baseline_offset.
- * After text, y advances by text_height.
- * Before separator, y advances by the measured gap from the design.
- * After separator, y advances by the measured gap to next text top.
- */
+// ═══════════════════════════════════════════════════════
+// MAIN GENERATOR — single function, two passes (measure + render)
+// ═══════════════════════════════════════════════════════
+
 export const generateLabelPDF = async (rawLabel, options = {}) => {
   const label = normalizeLabel(rawLabel)
   const [jpFont, pittogrammaData] = await Promise.all([
@@ -272,360 +281,322 @@ export const generateLabelPDF = async (rawLabel, options = {}) => {
     loadPittogramma(),
   ])
 
-  // Generate barcode image if EAN code is available (pre-rotated vertical)
+  // Barcode: generate pre-rotated vertical image
   let barcodeImg = null
   if (label.barcode) {
     barcodeImg = generateVerticalBarcodePdfDataUrl(label.barcode)
   }
 
-  const W = options.widthMm || 55
-  const M = 2.5
-  const CW = W - M * 2  // 50mm content width
-  // Barcode column: when barcode present, reserve space on the right
-  const BARCODE_COL_W = barcodeImg ? 12 : 0  // 12mm column for barcode
-  const CW_BC = CW - BARCODE_COL_W  // narrowed content width when barcode present
+  const W = options.widthMm || LABEL_W
+  const M = MARGIN
+  const CW = W - M * 2                             // total content width
+  const BC_W = barcodeImg ? BARCODE_COL_W : 0       // barcode column (0 if no barcode)
+  const TW = CW - BC_W                              // text width (narrowed when barcode)
   const lang = label.language || 'it'
   const t = TRANSLATIONS[lang] || TRANSLATIONS.it
-  // Legal description: custom from label > default translation
   const descText = label.legalDescription || t.desc
   const warnings = [t.pregnancy, t.minor, t.storage]
-  const BODY_LS = 2.5   // body line spacing (top-to-top)
-  const WARN_LS = 2.1   // warning line spacing
   const ingText = label.ingredients?.[lang] || ''
   const algText = label.allergens?.[lang] || ''
+  const hasCJK = (text) => /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]/.test(text)
 
-  // -------------------------------------------------------
-  // Phase 1: measure total height (dry run)
-  // -------------------------------------------------------
+  // ─── PASS 1: MEASURE HEIGHT ──────────────────────────
   const tmp = new jsPDF({ orientation: 'portrait', unit: 'mm', format: [W, 200] })
-  let cy = M  // cursor y = top edge
+  let cy = M
 
-  // -- Title (adaptive sizing) --
-  cy += 1.4  // margin to title top (design: 3.9 - 2.5 = 1.4)
+  // Title (adaptive)
+  cy += 1.4
   const titleText = (label.labelTitle || label.name || '').toUpperCase()
   const titleAvailW = CW - PITTO_SIZE - 2
-  let titleStyle = TITLE_SIZES[0]  // start with 8pt
+  let titleStyle = TITLE_SIZES[0]
   let nameLines
-
   for (let i = 0; i < TITLE_SIZES.length; i++) {
     titleStyle = TITLE_SIZES[i]
     tmp.setFontSize(titleStyle.pt)
     nameLines = tmp.splitTextToSize(titleText, titleAvailW)
-    if (nameLines.length <= 2) break  // fits in 2 lines, use this size
+    if (nameLines.length <= 2) break
   }
   cy += nameLines.length * titleStyle.ls
 
-  // -- Category --
-  // After title, cy is already at category top (8pt line spacing 3.1 = title height 2.8 + 0.3 leading)
-  if (label.category) {
-    cy += TH.body  // category text height
-  }
+  // Category
+  if (label.category) cy += TH.body
 
-  // -- Sep1 --
-  cy += 1.6  // category bottom to sep1 (reduced)
+  // Sep1
+  cy += 1.6
 
-  // -- Description (left-aligned) --
-  cy += 0.5  // sep1 to desc top
-  tmp.setFontSize(F.body)
+  // Description (full width, above barcode zone)
+  cy += 0.5
+  tmp.setFontSize(FS.body)
   const descLines = tmp.splitTextToSize(descText, CW)
-  cy += TH.body  // first line height
-  if (descLines.length > 1) cy += (descLines.length - 1) * BODY_LS
+  cy += TH.body
+  if (descLines.length > 1) cy += (descLines.length - 1) * LS.body
 
-  // -- Ingredients section (use CW_BC if barcode present) --
-  const bcStartY = cy  // track where barcode column starts
+  // ── BARCODE ZONE START ──
+  const bcStartY = cy
+
+  // Ingredients header + text
   if (ingText) {
-    cy += 0.3  // desc to "Ingredienti:" top (no sep2)
-    cy += TH.ingH  // header height
-    cy += 0.1  // header bottom to ingredient text top
-
-    tmp.setFontSize(F.body)
-    const ingLines = tmp.splitTextToSize(ingText, CW_BC)
-    cy += TH.body  // first ingredient line
-    if (ingLines.length > 1) cy += (ingLines.length - 1) * BODY_LS
+    cy += 0.3
+    cy += TH.ingH
+    cy += 0.1
+    tmp.setFontSize(FS.body)
+    const ingLines = tmp.splitTextToSize(ingText, TW)
+    cy += TH.body
+    if (ingLines.length > 1) cy += (ingLines.length - 1) * LS.body
   }
 
   // Allergens
   if (algText) {
-    tmp.setFontSize(F.body)
-    const algLines = tmp.splitTextToSize(t.alg + ': ' + algText.toUpperCase(), CW_BC)
-    cy += BODY_LS * algLines.length // includes gap from prev
+    tmp.setFontSize(FS.body)
+    const algLines = tmp.splitTextToSize(t.alg + ': ' + algText.toUpperCase(), TW)
+    cy += LS.body * algLines.length
   }
 
-  // Alcohol + Volume (same section, same spacing)
+  // Alcohol
   if (label.alcoholPct) {
-    cy += BODY_LS - TH.body  // gap from previous text bottom to this text top
+    cy += LS.body - TH.body
     cy += TH.body
   }
+
+  // Volume
   if (label.volumeMl) {
-    cy += BODY_LS - TH.body
+    cy += LS.body - TH.body
     cy += TH.body
   }
 
-  // -- Sep3 --
-  cy += 1.0  // last text bottom to sep3 (reduced)
+  // Sep3
+  cy += 1.0
 
-  // -- Origin + Importer section --
+  // Origin + Importer
   if (label.countryOfOrigin || label.importer?.name) {
-    cy += 0.4  // sep3 to origin text top (reduced)
-
-    tmp.setFontSize(F.body)
+    cy += 0.4
+    tmp.setFontSize(FS.body)
     if (label.countryOfOrigin) {
-      const originText = `${t.origin} ${label.countryOfOrigin}`
-      const oLines = tmp.splitTextToSize(originText, CW_BC)
+      const oLines = tmp.splitTextToSize(`${t.origin} ${label.countryOfOrigin}`, TW)
       cy += TH.body
-      if (oLines.length > 1) cy += (oLines.length - 1) * BODY_LS
+      if (oLines.length > 1) cy += (oLines.length - 1) * LS.body
     }
-    // "Importato da: Sake Company srl" on same line
     if (label.importer?.name) {
-      cy += BODY_LS - TH.body
-      const impLine = `${t.imp} ${label.importer.name}`
-      const impLines = tmp.splitTextToSize(impLine, CW_BC)
+      cy += LS.body - TH.body
       cy += TH.body
-      if (impLines.length > 1) cy += (impLines.length - 1) * BODY_LS
     }
     if (label.importer?.address) {
-      const aLines = tmp.splitTextToSize(label.importer.address, CW_BC)
-      cy += BODY_LS - TH.body
+      const aLines = tmp.splitTextToSize(label.importer.address, TW)
+      cy += LS.body - TH.body
       cy += TH.body
-      if (aLines.length > 1) cy += (aLines.length - 1) * BODY_LS
+      if (aLines.length > 1) cy += (aLines.length - 1) * LS.body
     }
     // Website
-    cy += BODY_LS - TH.body
+    cy += LS.body - TH.body
     cy += TH.body
   }
 
-  // -- end barcode column --
-  cy += 0.8  // origin section to footer
-  const bcEndY = cy  // track where barcode column ends
+  // ── BARCODE ZONE END ──
+  cy += 0.8
+  const bcEndY = cy
 
-  // -- Footer (QR + Avvertenze) --
-  const fWarnX = M + QR_SIZE + 2.5
-  const fWarnW = W - M - fWarnX
+  // Footer (QR/BoxIcon left + Avvertenze right)
+  const footerWarnX = M + QR_SIZE + 2.5
+  const footerWarnW = W - M - footerWarnX
 
-  tmp.setFontSize(F.warn)
-  let warnH = 0.5 + TH.warnH  // gap to avvertenze header bottom
-  const allWarnTextM = warnings.join(' ')
-  warnH += tmp.splitTextToSize(allWarnTextM, fWarnW).length * WARN_LS
+  tmp.setFontSize(FS.warn)
+  let warnH = 0.5 + TH.warnH
+  warnH += tmp.splitTextToSize(warnings.join(' '), footerWarnW).length * LS.warn
   if (t.qrNutrition) {
-    warnH += tmp.splitTextToSize(t.qrNutrition, fWarnW).length * WARN_LS
+    warnH += tmp.splitTextToSize(t.qrNutrition, footerWarnW).length * LS.warn
   }
-  const qrColH = QR_SIZE + 2.0  // space for QR + bottom row
-  const footerH = Math.max(qrColH, warnH)
-  cy += footerH
-  cy += TH.body  // bottom row (Cod. + Lotto)
+  const qrColH = QR_SIZE + 2.0
+  cy += Math.max(qrColH, warnH)
+  cy += TH.body  // Cod. + Lotto row
 
   const H = Math.max(cy + M, 40)
 
-  // -------------------------------------------------------
-  // Phase 2: render (page includes bleed area for crop marks)
-  // -------------------------------------------------------
-  const BLEED = 5  // extra space around label for crop marks
-  const OX = BLEED  // x offset for all content
-  const OY = BLEED  // y offset for all content
-  const PW = W + BLEED * 2
-  const PH = H + BLEED * 2
-  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: [PW, PH] })
+  // ─── PASS 2: RENDER ──────────────────────────────────
+  const OX = BLEED
+  const OY = BLEED
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: [W + BLEED * 2, H + BLEED * 2] })
   const hasJpFont = registerJpFont(doc, jpFont)
-  let y = M  // cursor: top edge of next element
+  let y = M
 
-  const hFont = (size, style = 'normal') => {
+  // Helper functions
+  const setFont = (size, style = 'normal') => {
     doc.setFontSize(size)
     doc.setFont('helvetica', style)
   }
-  const jpFontSet = (size) => {
+  const setJpFont = (size) => {
     doc.setFontSize(size)
     if (hasJpFont) doc.setFont('NotoSansJP', 'normal')
     else doc.setFont('helvetica', 'normal')
   }
-  const sep = () => {
-    doc.setDrawColor(SEP_R, SEP_G, SEP_B)
-    doc.setLineWidth(SEP_WIDTH_PT * 0.3528) // pt → mm
+  const drawSep = () => {
+    doc.setDrawColor(...SEP_COLOR)
+    doc.setLineWidth(SEP_LW)
     doc.line(OX + M, OY + y, OX + W - M, OY + y)
   }
-  // Draw text at top position y, returns nothing (caller advances y)
-  const txt = (text, bl) => {
-    doc.text(text, OX + M, OY + y + bl)
-  }
-  const txtAt = (text, x, bl) => {
-    doc.text(text, OX + x, OY + y + bl)
+  const drawText = (text, baselineOffset) => {
+    doc.text(text, OX + M, OY + y + baselineOffset)
   }
 
-  // =================================================================
-  // RENDER
-  // =================================================================
-
-  // --- Pittogramma (top-right) ---
+  // ── PITTOGRAMMA (top-right corner) ──
   if (pittogrammaData) {
     try {
       doc.addImage(pittogrammaData, 'PNG',
         OX + W - M - PITTO_SIZE, OY + M + 1.0,
         PITTO_SIZE, PITTO_SIZE)
-    } catch (e) {
-      console.warn('[LabelPrinter] Could not add pittogramma:', e)
-    }
+    } catch (e) { console.warn('[LabelPrinter] Pittogramma error:', e) }
   }
 
-  // --- Title: product name (adaptive size from Phase 1) ---
-  y += 1.4  // margin to title top
-  doc.setTextColor(0)  // ensure black text for title
-  hFont(titleStyle.pt, 'bold')
+  // ── TITLE ──
+  y += 1.4
+  doc.setTextColor(0)
+  setFont(titleStyle.pt, 'bold')
   const nameR = doc.splitTextToSize(titleText, titleAvailW)
-  txt(nameR, titleStyle.bl)
+  drawText(nameR, titleStyle.bl)
   y += nameR.length * titleStyle.ls
 
-  // --- Category (+ bottles per box for box labels) ---
+  // ── CATEGORY ──
   if (label.category) {
     doc.setTextColor(100)
-    hFont(F.subtitle, 'italic')
-    let categoryLine = label.category
+    setFont(FS.category, 'italic')
+    let catLine = label.category
     if (label._isBoxLabel && label.bottlesPerBox) {
-      categoryLine += ` · ${label.bottlesPerBox} ${label.bottlesPerBox === 1 ? 'bottiglia' : 'bottiglie'}`
+      catLine += ` · ${label.bottlesPerBox} ${label.bottlesPerBox === 1 ? 'bottiglia' : 'bottiglie'}`
     }
-    txt(categoryLine, BL.body)
+    drawText(catLine, BL.body)
     y += TH.body
     doc.setTextColor(0)
   }
 
-  // --- Sep1 ---
+  // ── SEP 1 ──
   y += 1.6
-  sep()
+  drawSep()
 
-  // --- Description (left-aligned) ---
+  // ── DESCRIPTION (full width, above barcode zone) ──
   y += 0.5
-  hFont(F.body, 'normal')
+  setFont(FS.body, 'normal')
   const descR = doc.splitTextToSize(descText, CW)
-  txt(descR, BL.body)
+  drawText(descR, BL.body)
   y += TH.body
-  if (descR.length > 1) y += (descR.length - 1) * BODY_LS
+  if (descR.length > 1) y += (descR.length - 1) * LS.body
 
-  // --- Ingredients section (narrowed if barcode present) ---
-  const renderBcStartY = y  // remember barcode column start
+  // ── BARCODE ZONE START ──
+  const renderBcStartY = y
+
+  // ── INGREDIENTS ──
   if (ingText) {
     y += 0.3
-    hFont(F.ingHeader, 'bold')
-    txt(t.ing + ':', BL.ingH)
+    setFont(FS.ingHeader, 'bold')
+    drawText(t.ing + ':', BL.ingH)
     y += TH.ingH
 
     y += 0.1
-    // Use JP font if ingredients contain CJK characters
-    const hasCJK = /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]/.test(ingText)
-    if (hasCJK && hasJpFont) jpFontSet(F.body)
-    else hFont(F.body, 'normal')
-    const ingR = doc.splitTextToSize(ingText, CW_BC)
-    txt(ingR, BL.body)
+    if (hasCJK(ingText) && hasJpFont) setJpFont(FS.body)
+    else setFont(FS.body, 'normal')
+    const ingR = doc.splitTextToSize(ingText, TW)
+    drawText(ingR, BL.body)
     y += TH.body
-    if (ingR.length > 1) y += (ingR.length - 1) * BODY_LS
+    if (ingR.length > 1) y += (ingR.length - 1) * LS.body
   }
 
-  // Allergens
+  // ── ALLERGENS ──
   if (algText) {
-    y += BODY_LS - TH.body
-    const algHasCJK = /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]/.test(algText)
-    if (algHasCJK && hasJpFont) jpFontSet(F.body)
-    else hFont(F.body, 'bold')
+    y += LS.body - TH.body
+    if (hasCJK(algText) && hasJpFont) setJpFont(FS.body)
+    else setFont(FS.body, 'bold')
     const algLine = t.alg + ': ' + algText.toUpperCase()
-    const algR = doc.splitTextToSize(algLine, CW_BC)
-    txt(algR, BL.body)
+    const algR = doc.splitTextToSize(algLine, TW)
+    drawText(algR, BL.body)
     y += TH.body
-    if (algR.length > 1) y += (algR.length - 1) * BODY_LS
+    if (algR.length > 1) y += (algR.length - 1) * LS.body
   }
 
-  // Alcohol
-  hFont(F.body, 'normal')
+  // ── ALCOHOL ──
+  setFont(FS.body, 'normal')
   if (label.alcoholPct) {
-    y += BODY_LS - TH.body
-    txt(`${t.alc}: ${label.alcoholPct}% ${t.vol}`, BL.body)
+    y += LS.body - TH.body
+    drawText(`${t.alc}: ${label.alcoholPct}% ${t.vol}`, BL.body)
     y += TH.body
   }
 
-  // Volume
+  // ── VOLUME ──
   if (label.volumeMl) {
-    y += BODY_LS - TH.body
-    txt(`${t.content}: ${label.volumeMl}ml`, BL.body)
+    y += LS.body - TH.body
+    drawText(`${t.content}: ${label.volumeMl}ml`, BL.body)
     y += TH.body
   }
 
-  // --- Sep3 ---
+  // ── SEP 3 ──
   y += 1.0
-  sep()
+  drawSep()
 
-  // --- Origin + Importer ---
+  // ── ORIGIN + IMPORTER ──
   if (label.countryOfOrigin || label.importer?.name) {
     y += 0.4
-    hFont(F.body, 'bold')
+    setFont(FS.body, 'bold')
 
     if (label.countryOfOrigin) {
       const originText = `${t.origin} ${label.countryOfOrigin}`
-      const oR = doc.splitTextToSize(originText, CW_BC)
-      txt(oR, BL.body)
+      const oR = doc.splitTextToSize(originText, TW)
+      drawText(oR, BL.body)
       y += TH.body
-      if (oR.length > 1) y += (oR.length - 1) * BODY_LS
+      if (oR.length > 1) y += (oR.length - 1) * LS.body
     }
 
-    // "Importato da: Sake Company srl" — "Importato da:" in grey, name in black
+    // "Importato da:" in grey, company name in black
     if (label.importer?.name) {
-      y += BODY_LS - TH.body
+      y += LS.body - TH.body
       const impPrefix = t.imp + ' '
-      // Draw prefix in grey
       doc.setTextColor(130)
-      hFont(F.body, 'normal')
+      setFont(FS.body, 'normal')
       doc.text(impPrefix, OX + M, OY + y + BL.body)
-      // Measure prefix width and draw name in black after it
       const prefixW = doc.getTextWidth(impPrefix)
       doc.setTextColor(0)
-      hFont(F.body, 'normal')
+      setFont(FS.body, 'normal')
       doc.text(label.importer.name, OX + M + prefixW, OY + y + BL.body)
       y += TH.body
     }
 
     if (label.importer?.address) {
-      y += BODY_LS - TH.body
-      hFont(F.body, 'normal')
-      const aR = doc.splitTextToSize(label.importer.address, CW_BC)
-      txt(aR, BL.body)
+      y += LS.body - TH.body
+      setFont(FS.body, 'normal')
+      const aR = doc.splitTextToSize(label.importer.address, TW)
+      drawText(aR, BL.body)
       y += TH.body
-      if (aR.length > 1) y += (aR.length - 1) * BODY_LS
+      if (aR.length > 1) y += (aR.length - 1) * LS.body
     }
 
     // Website
-    y += BODY_LS - TH.body
-    hFont(F.body, 'normal')
-    txt(t.website, BL.body)
+    y += LS.body - TH.body
+    setFont(FS.body, 'normal')
+    drawText(t.website, BL.body)
     y += TH.body
   }
 
-  // --- end of barcode column ---
+  // ── BARCODE ZONE END ──
   y += 0.8
-  const renderBcEndY = y  // barcode column ends here
+  const renderBcEndY = y
 
-  // --- EAN Barcode (right column, pre-rotated vertical image) ---
+  // ── BARCODE IMAGE (vertical, right column) ──
   if (barcodeImg) {
     try {
-      // Place the pre-rotated vertical barcode in the right column
-      const bcX = OX + W - M - BARCODE_COL_W + 0.5
+      const bcX = OX + W - M - BC_W + 0.5
       const bcAvailH = renderBcEndY - renderBcStartY - 2
-      const bcW = BARCODE_COL_W - 1  // image width in mm
-      // Maintain aspect ratio from the pre-rotated image
-      const aspect = barcodeImg.height / barcodeImg.width  // rotated: width=srcH, height=srcW
+      const bcW = BC_W - 1
+      const aspect = barcodeImg.height / barcodeImg.width
       let bcH = bcW * aspect
-      // Clamp to available height
-      if (bcH > bcAvailH) bcH = bcAvailH
-      // Center vertically in the available space
-      const bcY = OY + renderBcStartY + 1 + (bcAvailH - bcH) / 2
+      if (bcH > bcAvailH) bcH = bcAvailH  // clamp to fit
+      const bcY = OY + renderBcStartY + 1 + (bcAvailH - bcH) / 2  // center vertically
       doc.addImage(barcodeImg.dataUrl, 'PNG', bcX, bcY, bcW, bcH)
-    } catch (e) {
-      console.warn('[LabelPrinter] Could not add barcode:', e)
-    }
+    } catch (e) { console.warn('[LabelPrinter] Barcode error:', e) }
   }
 
-  // --- Footer: QR left + Avvertenze right ---
+  // ── FOOTER: QR/Box icon (left) + Avvertenze (right) ──
   const qrY = OY + y + 0.8
   const wX = OX + M + QR_SIZE + 2.5
   const wW = W - M - (M + QR_SIZE + 2.5)
 
-  // QR code (or box icon for box labels)
+  // QR code or Box icon
   if (label._isBoxLabel && label._boxIconDataUrl) {
-    // Box label: show box icon instead of QR code (same size/position)
     try {
       const fmt = label._boxIconDataUrl.startsWith('data:image/jpeg') ? 'JPEG' : 'PNG'
       doc.addImage(label._boxIconDataUrl, fmt, OX + M, qrY, QR_SIZE, QR_SIZE)
@@ -634,102 +605,87 @@ export const generateLabelPDF = async (rawLabel, options = {}) => {
     try { doc.addImage(label.qr, 'PNG', OX + M, qrY, QR_SIZE, QR_SIZE) }
     catch { doc.rect(OX + M, qrY, QR_SIZE, QR_SIZE) }
   } else {
-    doc.setDrawColor(SEP_R, SEP_G, SEP_B)
-    doc.setLineWidth(SEP_WIDTH_PT * 0.3528)
+    doc.setDrawColor(...SEP_COLOR)
+    doc.setLineWidth(SEP_LW)
     doc.rect(OX + M, qrY, QR_SIZE, QR_SIZE)
     doc.setFontSize(4)
     doc.text('QR CODE', OX + M + 4, qrY + 8)
   }
 
-  // Avvertenze (aligned with QR top)
+  // Avvertenze
   let wy = qrY
-  hFont(F.warnHeader, 'bold')
+  setFont(FS.warnHeader, 'bold')
   doc.text(t.warn + ':', wX, wy + BL.warnH)
-  wy += TH.warnH + (WARN_LS - TH.warn)
+  wy += TH.warnH + (LS.warn - TH.warn)
 
-  // All warnings as one continuous text block
-  hFont(F.warn, 'normal')
+  setFont(FS.warn, 'normal')
   const allWarnText = warnings.join(' ')
   const warnLines = doc.splitTextToSize(allWarnText, wW)
   doc.text(warnLines, wX, wy + BL.warn)
-  wy += warnLines.length * WARN_LS
+  wy += warnLines.length * LS.warn
 
-  // QR nutrition info on its own separate line
+  // "Info nutrizionali nel QR" on its own line
   if (t.qrNutrition) {
     const nutLines = doc.splitTextToSize(t.qrNutrition, wW)
     doc.text(nutLines, wX, wy + BL.warn)
-    wy += nutLines.length * WARN_LS
+    wy += nutLines.length * LS.warn
   }
 
-  // --- Bottom row: Cod. left (under QR) + Lotto right ---
-  // Use the maximum of QR bottom and warnings bottom to prevent overlap
+  // ── BOTTOM ROW: Cod. + Lotto ──
   const bottomRowY = Math.max(qrY + QR_SIZE + 2.0, wy + 1.0)
-  hFont(F.cod, 'normal')
+  setFont(FS.cod, 'normal')
   doc.setTextColor(0)
   doc.text(`${t.code} ${label.code || ''}`, OX + M, bottomRowY)
-
   doc.setTextColor(100)
-  hFont(F.cod, 'normal')
   doc.text(t.lot, wX, bottomRowY)
   doc.setTextColor(0)
 
-  // --- Crop marks (light L-shaped at 4 corners) ---
-  // Marks are placed at the corners of the content area (margin edges)
-  const CM_LEN = 3      // length of each L arm in mm
-  const CM_GAP = 0.8    // gap between mark and content edge
-  const CM_LW = 0.15    // line width in mm (very light)
-  doc.setDrawColor(160, 160, 160)  // light grey
-  doc.setLineWidth(CM_LW)
-
-  const cL = OX + M - CM_GAP          // left edge
-  const cR = OX + W - M + CM_GAP      // right edge
-  const cT = OY + M - CM_GAP          // top edge
-  const cB = OY + H - M + CM_GAP      // bottom edge
-
-  // Top-left L
-  doc.line(cL - CM_LEN, cT, cL, cT)  // horizontal →
-  doc.line(cL, cT - CM_LEN, cL, cT)  // vertical ↓
-
-  // Top-right L
-  doc.line(cR, cT, cR + CM_LEN, cT)  // horizontal →
-  doc.line(cR, cT - CM_LEN, cR, cT)  // vertical ↓
-
-  // Bottom-left L
-  doc.line(cL - CM_LEN, cB, cL, cB)  // horizontal →
-  doc.line(cL, cB, cL, cB + CM_LEN)  // vertical ↓
-
-  // Bottom-right L
-  doc.line(cR, cB, cR + CM_LEN, cB)  // horizontal →
-  doc.line(cR, cB, cR, cB + CM_LEN)  // vertical ↓
+  // ── CROP MARKS ──
+  const cmLen = 3, cmGap = 0.8, cmLw = 0.15
+  doc.setDrawColor(160, 160, 160)
+  doc.setLineWidth(cmLw)
+  const cL = OX + M - cmGap
+  const cR = OX + W - M + cmGap
+  const cT = OY + M - cmGap
+  const cB = OY + H - M + cmGap
+  // Top-left
+  doc.line(cL - cmLen, cT, cL, cT)
+  doc.line(cL, cT - cmLen, cL, cT)
+  // Top-right
+  doc.line(cR, cT, cR + cmLen, cT)
+  doc.line(cR, cT - cmLen, cR, cT)
+  // Bottom-left
+  doc.line(cL - cmLen, cB, cL, cB)
+  doc.line(cL, cB, cL, cB + cmLen)
+  // Bottom-right
+  doc.line(cR, cB, cR + cmLen, cB)
+  doc.line(cR, cB, cR, cB + cmLen)
 
   return doc
 }
 
-/**
- * Generate a simple box icon as a data URL (SVG → Canvas → PNG)
- */
+// ═══════════════════════════════════════════════════════
+// BOX ICON FALLBACK (programmatic)
+// ═══════════════════════════════════════════════════════
+
 function generateBoxIconDataUrl(size = 200) {
   const canvas = document.createElement('canvas')
   canvas.width = size
   canvas.height = size
   const ctx = canvas.getContext('2d')
-
-  // Draw a box/package icon
-  const p = size * 0.1  // padding
+  const p = size * 0.1
   const w = size - p * 2
   const h = size - p * 2
   const cx = size / 2
-  const topH = h * 0.25  // top flap height
+  const topH = h * 0.25
 
   ctx.strokeStyle = '#444'
   ctx.lineWidth = size * 0.025
   ctx.fillStyle = '#f5f5f5'
 
-  // Main box body
   ctx.fillRect(p, p + topH, w, h - topH)
   ctx.strokeRect(p, p + topH, w, h - topH)
 
-  // Top flap (trapezoid)
   ctx.beginPath()
   ctx.moveTo(p, p + topH)
   ctx.lineTo(p + w * 0.15, p)
@@ -740,13 +696,11 @@ function generateBoxIconDataUrl(size = 200) {
   ctx.fill()
   ctx.stroke()
 
-  // Center line on top flap
   ctx.beginPath()
   ctx.moveTo(cx, p)
   ctx.lineTo(cx, p + topH)
   ctx.stroke()
 
-  // Vertical center line on box body
   ctx.setLineDash([size * 0.03, size * 0.02])
   ctx.beginPath()
   ctx.moveTo(cx, p + topH)
@@ -754,18 +708,15 @@ function generateBoxIconDataUrl(size = 200) {
   ctx.stroke()
   ctx.setLineDash([])
 
-  // "BOX" text
-  ctx.fillStyle = '#333'
-  ctx.font = `bold ${size * 0.15}px Helvetica, Arial, sans-serif`
-  ctx.textAlign = 'center'
-  ctx.textBaseline = 'middle'
-  ctx.fillText('BOX', cx, p + topH + (h - topH) * 0.55)
-
   return canvas.toDataURL('image/png')
 }
 
+// ═══════════════════════════════════════════════════════
+// PUBLIC API — download functions
+// ═══════════════════════════════════════════════════════
+
 /**
- * Download single label PDF (bottle label)
+ * Download bottle label PDF
  */
 export const downloadLabelPDF = async (rawLabel, options) => {
   const label = normalizeLabel(rawLabel)
@@ -775,17 +726,15 @@ export const downloadLabelPDF = async (rawLabel, options) => {
 }
 
 /**
- * Download box label PDF — replaces QR with box icon, uses box EAN
+ * Download box label PDF — box icon instead of QR, box EAN barcode
  */
 export const downloadBoxLabelPDF = async (rawLabel, options) => {
   const label = normalizeLabel(rawLabel)
-  // Load box icon from public/icons/ (BOX.jpg or BOX.png)
   let boxIconDataUrl = await loadBoxIcon()
-  // Fallback to programmatic icon if file not found
   if (!boxIconDataUrl) boxIconDataUrl = generateBoxIconDataUrl(300)
   const boxLabel = {
     ...label,
-    barcode: label.barcodeBox || null,  // only use box EAN, no fallback to bottle
+    barcode: label.barcodeBox || null,  // only box EAN, no fallback
     _isBoxLabel: true,
     _boxIconDataUrl: boxIconDataUrl,
   }
@@ -805,7 +754,7 @@ export const downloadBothLabelsPDF = async (label, options) => {
 }
 
 /**
- * Download batch — one label per page
+ * Download batch — one label per product
  */
 export const downloadBatchPDF = async (labels, options = {}) => {
   if (!labels.length) return
