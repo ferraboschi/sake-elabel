@@ -584,9 +584,9 @@ export const generateLabelPDF = async (rawLabel, options = {}) => {
   // ── BARCODE IMAGE (vertical, right column) ──
   if (barcodeImg) {
     try {
-      const bcX = OX + W - M - BC_W + 0.5
+      const bcX = OX + W - M - BC_W + 1
       const bcAvailH = renderBcEndY - renderBcStartY - 2
-      const bcW = BC_W - 1
+      const bcW = BC_W - 2.5                          // extra right margin to keep digits inside crop marks
       const aspect = barcodeImg.height / barcodeImg.width
       let bcH = bcW * aspect
       if (bcH > bcAvailH) bcH = bcAvailH  // clamp to fit
