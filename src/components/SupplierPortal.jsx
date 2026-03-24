@@ -399,7 +399,7 @@ export default function SupplierPortal() {
   // EAN edit data is per-product (not per-group, since each size has its own EAN)
   const [eanEditData, setEanEditData] = useState({})
   const [eanBoxEditData, setEanBoxEditData] = useState({})
-  const [bottlesPerBoxEditData, setBottlesPerBoxEditData] = useState({}) // groupKey → value
+  const [bottlesPerBoxEditData, setBottlesPerBoxEditData] = useState({}) // recordId → value
 
   const getEanValue = (product) => {
     if (eanEditData[product._recordId] !== undefined) return eanEditData[product._recordId]
@@ -411,9 +411,9 @@ export default function SupplierPortal() {
     return product.barcodeBox || ''
   }
 
-  const getBottlesPerBoxValue = (group) => {
-    if (bottlesPerBoxEditData[group.key] !== undefined) return bottlesPerBoxEditData[group.key]
-    return group.items[0].bottlesPerBox || ''
+  const getBottlesPerBoxValue = (product) => {
+    if (bottlesPerBoxEditData[product._recordId] !== undefined) return bottlesPerBoxEditData[product._recordId]
+    return product.bottlesPerBox || ''
   }
 
   const updateEan = (recordId, value) => {
@@ -426,9 +426,9 @@ export default function SupplierPortal() {
     setEanBoxEditData(prev => ({ ...prev, [recordId]: clean }))
   }
 
-  const updateBottlesPerBox = (groupKey, value) => {
+  const updateBottlesPerBox = (recordId, value) => {
     const clean = normalizeJapaneseInput(value, true)
-    setBottlesPerBoxEditData(prev => ({ ...prev, [groupKey]: clean }))
+    setBottlesPerBoxEditData(prev => ({ ...prev, [recordId]: clean }))
   }
 
   const updateField = (groupKey, field, rawValue) => {
@@ -491,15 +491,9 @@ export default function SupplierPortal() {
         payload.alcoholPct = alcoholVal
       }
 
-      // Save bottles per box (same for all items in the group)
-      const bpbVal = bottlesPerBoxEditData[group.key]
-      if (bpbVal !== undefined && bpbVal !== '') {
-        payload.bottlesPerBox = parseInt(bpbVal, 10) || 0
-      }
-
       // Save to ALL items in the group (all sizes)
       for (const item of items) {
-        // Include EAN bottle + EAN box if edited for this specific item
+        // Include per-item logistics: EAN bottle, EAN box, bottles per box
         const itemPayload = { ...payload }
         const eanVal = eanEditData[item._recordId]
         if (eanVal !== undefined && eanVal !== '') {
@@ -508,6 +502,10 @@ export default function SupplierPortal() {
         const eanBoxVal = eanBoxEditData[item._recordId]
         if (eanBoxVal !== undefined && eanBoxVal !== '') {
           itemPayload.eanBox = parseInt(eanBoxVal, 10) || 0
+        }
+        const bpbVal = bottlesPerBoxEditData[item._recordId]
+        if (bpbVal !== undefined && bpbVal !== '') {
+          itemPayload.bottlesPerBox = parseInt(bpbVal, 10) || 0
         }
         await updateProduct(item._recordId, itemPayload)
       }
@@ -1150,90 +1148,95 @@ export default function SupplierPortal() {
                   background: '#e8eaf6', border: '1px solid #c5cae9', borderRadius: '8px',
                   padding: '12px 14px',
                 }}>
-                  <div style={{ fontSize: '11px', fontWeight: 600, color: '#283593', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  <div style={{ fontSize: '11px', fontWeight: 600, color: '#283593', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                     {t.logisticsTitle}
                   </div>
 
-                  {/* Bottles per box (shared across all sizes) */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
-                    <label style={{ fontSize: '12px', color: '#555', fontWeight: 500, minWidth: '130px' }}>
+                  {/* Column headers */}
+                  <div style={{
+                    display: 'grid', gridTemplateColumns: '90px 1fr 1fr 1fr',
+                    gap: '6px', marginBottom: '4px', paddingLeft: '2px',
+                  }}>
+                    <span style={{ fontSize: '10px', color: '#5c6bc0', fontWeight: 600 }}></span>
+                    <span style={{ fontSize: '10px', color: '#5c6bc0', fontWeight: 600 }}>
                       {t.bottlesPerBox}
-                    </label>
-                    <input
-                      type="text" inputMode="numeric"
-                      placeholder="6"
-                      value={getBottlesPerBoxValue(group)}
-                      onChange={e => updateBottlesPerBox(group.key, e.target.value)}
-                      style={{
-                        padding: '5px 8px', fontSize: '13px', border: '1px solid #c5cae9',
-                        borderRadius: '6px', width: '60px', textAlign: 'center', fontFamily: 'monospace',
-                        background: '#fff',
-                      }}
-                    />
+                    </span>
+                    <span style={{ fontSize: '10px', color: '#5c6bc0', fontWeight: 600 }}>
+                      {t.eanBottle}
+                    </span>
+                    <span style={{ fontSize: '10px', color: '#5c6bc0', fontWeight: 600 }}>
+                      {t.eanBox}
+                    </span>
                   </div>
 
-                  {/* Per-size EAN codes */}
+                  {/* Per-size row: Bottles + EAN Bottle + EAN Box */}
                   {group.items.map(item => (
                     <div key={item._recordId} style={{
-                      background: '#fff', borderRadius: '6px', padding: '8px 10px', marginBottom: '6px',
+                      display: 'grid', gridTemplateColumns: '90px 1fr 1fr 1fr',
+                      gap: '6px', alignItems: 'center',
+                      background: '#fff', borderRadius: '6px', padding: '6px 8px', marginBottom: '4px',
                       border: '1px solid #e0e0e0',
                     }}>
-                      <div style={{ fontSize: '11px', fontWeight: 600, color: '#444', marginBottom: '6px' }}>
-                        {item.volumeMl}ml · {item.code}
+                      {/* Size badge */}
+                      <span style={{ fontSize: '11px', fontWeight: 600, color: '#444' }}>
+                        {item.volumeMl}ml
+                      </span>
+
+                      {/* Bottles per box */}
+                      <input
+                        type="text" inputMode="numeric"
+                        placeholder="6"
+                        value={getBottlesPerBoxValue(item)}
+                        onChange={e => updateBottlesPerBox(item._recordId, e.target.value)}
+                        style={{
+                          padding: '4px 8px', fontSize: '12px', border: '1px solid #c5cae9',
+                          borderRadius: '6px', width: '55px', textAlign: 'center', fontFamily: 'monospace',
+                          background: '#fff',
+                        }}
+                      />
+
+                      {/* EAN Bottle */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <input
+                          type="text" inputMode="numeric"
+                          placeholder={t.eanBottlePlaceholder}
+                          value={getEanValue(item)}
+                          onChange={e => updateEan(item._recordId, e.target.value)}
+                          style={{
+                            padding: '4px 8px', fontSize: '12px', border: '1px solid #ddd',
+                            borderRadius: '6px', flex: 1, maxWidth: '150px', fontFamily: 'monospace',
+                            background: getEanValue(item) ? '#f0f7ff' : '#fff',
+                          }}
+                        />
+                        {getEanValue(item) && getEanValue(item).length === 13 && (
+                          <span style={{ fontSize: '11px', color: '#2e7d32' }}>✓</span>
+                        )}
+                        {getEanValue(item) && getEanValue(item).length > 0 && getEanValue(item).length !== 13 && (
+                          <span style={{ fontSize: '10px', color: '#e65100' }}>13</span>
+                        )}
                       </div>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
-                        {/* EAN Bottle */}
-                        <div>
-                          <label style={{ fontSize: '10px', color: '#888', display: 'block', marginBottom: '2px' }}>
-                            {t.eanBottle}
-                          </label>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                            <input
-                              type="text" inputMode="numeric"
-                              placeholder={t.eanBottlePlaceholder}
-                              value={getEanValue(item)}
-                              onChange={e => updateEan(item._recordId, e.target.value)}
-                              style={{
-                                padding: '4px 8px', fontSize: '12px', border: '1px solid #ddd',
-                                borderRadius: '6px', width: '145px', fontFamily: 'monospace',
-                                background: getEanValue(item) ? '#f0f7ff' : '#fff',
-                              }}
-                            />
-                            {getEanValue(item) && getEanValue(item).length === 13 && (
-                              <span style={{ fontSize: '11px', color: '#2e7d32' }}>✓</span>
-                            )}
-                            {getEanValue(item) && getEanValue(item).length > 0 && getEanValue(item).length !== 13 && (
-                              <span style={{ fontSize: '10px', color: '#e65100' }}>13</span>
-                            )}
-                          </div>
-                        </div>
-                        {/* EAN Box / ITF-14 */}
-                        <div>
-                          <label style={{ fontSize: '10px', color: '#888', display: 'block', marginBottom: '2px' }}>
-                            {t.eanBox}
-                          </label>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                            <input
-                              type="text" inputMode="numeric"
-                              placeholder={t.eanBoxPlaceholder}
-                              value={getEanBoxValue(item)}
-                              onChange={e => updateEanBox(item._recordId, e.target.value)}
-                              style={{
-                                padding: '4px 8px', fontSize: '12px', border: '1px solid #ddd',
-                                borderRadius: '6px', width: '155px', fontFamily: 'monospace',
-                                background: getEanBoxValue(item) ? '#fff8e1' : '#fff',
-                              }}
-                            />
-                            {getEanBoxValue(item) && (getEanBoxValue(item).length === 13 || getEanBoxValue(item).length === 14) && (
-                              <span style={{ fontSize: '11px', color: '#2e7d32' }}>
-                                ✓ {getEanBoxValue(item).length === 14 ? 'ITF' : 'EAN'}
-                              </span>
-                            )}
-                            {getEanBoxValue(item) && getEanBoxValue(item).length > 0 && getEanBoxValue(item).length !== 13 && getEanBoxValue(item).length !== 14 && (
-                              <span style={{ fontSize: '10px', color: '#e65100' }}>13/14</span>
-                            )}
-                          </div>
-                        </div>
+
+                      {/* EAN Box / ITF-14 */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <input
+                          type="text" inputMode="numeric"
+                          placeholder={t.eanBoxPlaceholder}
+                          value={getEanBoxValue(item)}
+                          onChange={e => updateEanBox(item._recordId, e.target.value)}
+                          style={{
+                            padding: '4px 8px', fontSize: '12px', border: '1px solid #ddd',
+                            borderRadius: '6px', flex: 1, maxWidth: '160px', fontFamily: 'monospace',
+                            background: getEanBoxValue(item) ? '#fff8e1' : '#fff',
+                          }}
+                        />
+                        {getEanBoxValue(item) && (getEanBoxValue(item).length === 13 || getEanBoxValue(item).length === 14) && (
+                          <span style={{ fontSize: '10px', color: '#2e7d32', whiteSpace: 'nowrap' }}>
+                            ✓{getEanBoxValue(item).length === 14 ? 'ITF' : ''}
+                          </span>
+                        )}
+                        {getEanBoxValue(item) && getEanBoxValue(item).length > 0 && getEanBoxValue(item).length !== 13 && getEanBoxValue(item).length !== 14 && (
+                          <span style={{ fontSize: '10px', color: '#e65100' }}>13/14</span>
+                        )}
                       </div>
                     </div>
                   ))}
