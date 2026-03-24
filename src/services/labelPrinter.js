@@ -414,7 +414,10 @@ export const generateLabelPDF = async (rawLabel, options = {}) => {
   cy += Math.max(qrColH, warnH)
   cy += TH.body  // Cod. + Lotto row
 
-  const H = Math.max(cy + M, 40)
+  // Extra bottom padding for barcode labels: text column is narrower → more wrapping → taller content
+  // that gets too close to the bottom crop marks. Add padding to balance top/bottom spacing.
+  const extraBottom = barcodeImg ? 1.5 : 0
+  const H = Math.max(cy + M + extraBottom, 40)
 
   // ─── PASS 2: RENDER ──────────────────────────────────
   const OX = BLEED
