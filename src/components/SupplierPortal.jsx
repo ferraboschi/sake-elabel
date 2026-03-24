@@ -1129,6 +1129,8 @@ export default function SupplierPortal() {
                     const itemCanPrint = itemHasAlcohol && itemHasIngredients
                     const itemIsPrinting = printingGroup === item._recordId
                     const itemHasBoxEan = !!(item.barcodeBox || eanBoxEditData[item._recordId])
+                    const itemHasBottlesPerBox = !!(getBottlesPerBoxValue(item))
+                    const itemCanPrintBox = itemCanPrint && itemHasBottlesPerBox
                     const itemIsPrintingBox = printingBoxGroup === item._recordId
                     const itemIsPrintingQR = printingQRGroup === item._recordId
                     const cellStyle = { display: 'flex', flexDirection: 'column', gap: '2px' }
@@ -1228,15 +1230,21 @@ export default function SupplierPortal() {
                             {itemIsPrinting ? '...' : '🍶'}
                           </button>
                           {/* Box label */}
-                          <button onClick={() => handlePrintBox(item)}
-                            disabled={!itemCanPrint || !itemHasBoxEan || itemIsPrintingBox}
+                          <button onClick={() => {
+                              if (!itemHasBottlesPerBox) {
+                                alert(lang === 'jp' ? '箱あたりの本数が未入力です' : 'Manca il numero di bottiglie per box')
+                                return
+                              }
+                              handlePrintBox(item)
+                            }}
+                            disabled={!itemCanPrint || itemIsPrintingBox}
                             title={lang === 'jp' ? 'ボックスラベル' : 'Etichetta box'}
                             style={{
                               padding: '4px 10px', fontSize: '12px', fontWeight: 600,
-                              background: (!itemCanPrint || !itemHasBoxEan) ? '#e0e0e0' : itemIsPrintingBox ? '#ccc' : '#e65100',
+                              background: !itemCanPrint ? '#e0e0e0' : itemIsPrintingBox ? '#ccc' : '#e65100',
                               color: '#fff', border: 'none', borderRadius: '5px',
-                              cursor: (!itemCanPrint || !itemHasBoxEan || itemIsPrintingBox) ? 'default' : 'pointer',
-                              whiteSpace: 'nowrap', opacity: (!itemCanPrint || !itemHasBoxEan) ? 0.5 : 1,
+                              cursor: !itemCanPrint || itemIsPrintingBox ? 'default' : 'pointer',
+                              whiteSpace: 'nowrap', opacity: !itemCanPrint ? 0.5 : 1,
                             }}>
                             {itemIsPrintingBox ? '...' : '📦'}
                           </button>
