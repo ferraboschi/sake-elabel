@@ -1,5 +1,6 @@
 /**
  * Label Printer Service — BACK LABEL (retro etichetta)
+ * Version: 2.1.0 — 2026-03-24T14:00
  *
  * Rewritten from scratch to match the reference PDF design exactly.
  *
@@ -289,7 +290,7 @@ export const generateLabelPDF = async (rawLabel, options = {}) => {
 
   const W = options.widthMm || LABEL_W
   const M = MARGIN
-  const TEXT_BUFFER = 2                              // safety buffer: jsPDF underestimates text width
+  const TEXT_BUFFER = 3                              // safety buffer: jsPDF underestimates text width
   const CW = W - M * 2 - TEXT_BUFFER                // content width with safety margin
   const BC_W = barcodeImg ? BARCODE_COL_W : 0       // barcode column (0 if no barcode)
   const TW = CW - BC_W                              // text width (narrowed when barcode)
@@ -308,7 +309,7 @@ export const generateLabelPDF = async (rawLabel, options = {}) => {
   // Title (adaptive)
   cy += 1.4
   const titleText = (label.labelTitle || label.name || '').toUpperCase()
-  const titleAvailW = CW - PITTO_SIZE - 2
+  const titleAvailW = CW - PITTO_SIZE - 4          // gap between title and pittogramma
   let titleStyle = TITLE_SIZES[0]
   let nameLines
   for (let i = 0; i < TITLE_SIZES.length; i++) {
@@ -396,9 +397,12 @@ export const generateLabelPDF = async (rawLabel, options = {}) => {
   cy += 0.8
   const bcEndY = cy
 
+  // Footer sep + spacing
+  cy += 0.5 // space for separator before footer
+
   // Footer (QR/BoxIcon left + Avvertenze right)
   const footerWarnX = M + QR_SIZE + 2.5
-  const footerWarnW = W - M - footerWarnX - 3  // 3mm safety buffer (jsPDF underestimates text width)
+  const footerWarnW = W - M - footerWarnX - 5  // 5mm safety buffer (jsPDF underestimates text width)
 
   tmp.setFontSize(FS.warn)
   let warnH = 0.5 + TH.warnH
@@ -442,7 +446,7 @@ export const generateLabelPDF = async (rawLabel, options = {}) => {
   if (pittogrammaData) {
     try {
       doc.addImage(pittogrammaData, 'PNG',
-        OX + W - M - PITTO_SIZE - 2.5, OY + M + 1.0,
+        OX + W - M - PITTO_SIZE - 4, OY + M + 1.0,
         PITTO_SIZE, PITTO_SIZE)
     } catch (e) { console.warn('[LabelPrinter] Pittogramma error:', e) }
   }
@@ -591,10 +595,13 @@ export const generateLabelPDF = async (rawLabel, options = {}) => {
     } catch (e) { console.warn('[LabelPrinter] Barcode error:', e) }
   }
 
+  // ── SEP (before footer) ──
+  drawSep()
+
   // ── FOOTER: QR/Box icon (left) + Avvertenze (right) ──
   const qrY = OY + y + 0.8
   const wX = OX + M + QR_SIZE + 2.5
-  const wW = W - M - (M + QR_SIZE + 2.5) - 3  // 3mm safety buffer
+  const wW = W - M - (M + QR_SIZE + 2.5) - 5  // 5mm safety buffer
 
   // QR code or Box icon
   if (label._isBoxLabel && label._boxIconDataUrl) {
