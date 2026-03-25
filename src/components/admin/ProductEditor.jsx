@@ -103,6 +103,10 @@ const ProductEditor = ({
   const hasIngredients = re.ingredients?.trim() || product.ingredients?.[selectedLanguage]
   const isReady = !!hasIngredients
 
+  // Empty-field highlighting: red border on required fields that are empty
+  const emptyBorder = { border: '1.5px solid #dc3545', background: '#fffafa' }
+  const emptyLabel = { color: '#dc3545' }
+
   // Allowed regions
   const allowedRegionCodes = (product.salesRegion?.length > 0)
     ? product.salesRegion
@@ -286,7 +290,7 @@ const ProductEditor = ({
               onChange={e => updateField('ingredients', e.target.value)}
               onBlur={e => autoSave('ingredients', e.target.value)}
               rows={3}
-              style={{ ...inputStyle, minHeight: '80px', resize: 'vertical' }}
+              style={{ ...inputStyle, minHeight: '80px', resize: 'vertical', ...(!hasIngredients ? emptyBorder : {}) }}
             />
           </div>
 
@@ -305,14 +309,14 @@ const ProductEditor = ({
 
           {/* Alcool */}
           <div>
-            <label style={fieldLabelStyle}>Alcool % / アルコール度数</label>
+            <label style={{ ...fieldLabelStyle, ...(!re.alcoholPct ? emptyLabel : {}) }}>Alcool % / アルコール度数{!re.alcoholPct && ' *'}</label>
             <input
               type="number"
               step="0.1"
               value={re.alcoholPct || ''}
               onChange={e => updateField('alcoholPct', e.target.value)}
               onBlur={e => autoSave('alcoholPct', e.target.value)}
-              style={{ ...inputStyle, maxWidth: '160px' }}
+              style={{ ...inputStyle, maxWidth: '160px', ...(!re.alcoholPct ? emptyBorder : {}) }}
             />
           </div>
 
@@ -362,7 +366,7 @@ const ProductEditor = ({
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
           <div>
-            <label style={fieldLabelStyle}>EAN Bottiglia (13 cifre) / ボトル</label>
+            <label style={{ ...fieldLabelStyle, ...(!product.barcode ? emptyLabel : {}) }}>EAN Bottiglia (13 cifre) / ボトル{!product.barcode && ' *'}</label>
             <input
               type="text"
               inputMode="numeric"
@@ -378,7 +382,7 @@ const ProductEditor = ({
                   updateProduct(product._recordId, { ean: parseInt(e.target.value, 10) }).catch(err => console.warn('[EAN]', err.message))
                 }
               }}
-              style={{ ...inputStyle, fontFamily: 'ui-monospace, monospace' }}
+              style={{ ...inputStyle, fontFamily: 'ui-monospace, monospace', ...(!product.barcode ? emptyBorder : {}) }}
             />
           </div>
           <div>

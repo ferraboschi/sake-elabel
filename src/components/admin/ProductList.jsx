@@ -371,7 +371,7 @@ const ProductList = ({
                       ) : hasLabel && isComplete ? (
                         <Badge color="#1e7a34" bg="#d4edda">OK</Badge>
                       ) : !isComplete ? (
-                        <Badge color="#856404" bg="#fff3cd">{missing.length} campo{missing.length > 1 ? 'i' : ''}</Badge>
+                        <Badge color="#856404" bg="#fff3cd">{missing.length} camp{missing.length > 1 ? 'i' : 'o'}</Badge>
                       ) : null}
                     </div>
 
