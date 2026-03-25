@@ -6,6 +6,7 @@ import { useGenerateLabel } from '../hooks/useGenerateLabel'
 import { downloadBoxLabelPDF } from '../services/labelPrinter'
 
 const VALID_TOKENS = ['sake2026supplier', 'fornitore2026', 'supplier2026']
+const VALID_PASSWORDS = ['sake2026', 'fornitore2026']
 
 // Only show beverage products (exclude books, merch, display items, etc.)
 const BEVERAGE_CATEGORIES = new Set([
@@ -377,8 +378,21 @@ export default function SupplierPortal() {
   const { generate, generating: generatingLabel, generateQR } = useGenerateLabel()
   const [producerFilter, setProducerFilter] = useState(producerParam.replace(/[-_]/g, ' '))
   const [productFilter, setProductFilter] = useState('')
+  const [passwordInput, setPasswordInput] = useState('')
+  const [passwordError, setPasswordError] = useState(false)
+  const [loggedInViaPassword, setLoggedInViaPassword] = useState(false)
 
-  const isAuthorized = VALID_TOKENS.includes(token)
+  const isAuthorized = VALID_TOKENS.includes(token) || loggedInViaPassword
+
+  const handlePasswordLogin = (e) => {
+    e.preventDefault()
+    if (VALID_PASSWORDS.includes(passwordInput.trim().toLowerCase())) {
+      setLoggedInViaPassword(true)
+      setPasswordError(false)
+    } else {
+      setPasswordError(true)
+    }
+  }
 
   useEffect(() => {
     if (!isAuthorized) { setLoading(false); return }
@@ -727,13 +741,56 @@ export default function SupplierPortal() {
     return values.ingredientsIt || ''
   }
 
-  // --- Unauthorized ---
+  // --- Unauthorized: show password login ---
   if (!isAuthorized) {
     return (
-      <div style={{ padding: '60px 20px', textAlign: 'center', fontFamily: 'Inter, -apple-system, sans-serif' }}>
-        <h1 style={{ fontSize: '22px', color: '#333', marginBottom: '12px' }}>{T.it.unauthorized}</h1>
-        <p style={{ color: '#888' }}>{T.it.unauthorizedMsg}</p>
-        <p style={{ color: '#888', marginTop: '12px' }}>{T.jp.unauthorizedMsg}</p>
+      <div style={{
+        minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontFamily: 'Inter, -apple-system, sans-serif', background: '#f7f8fa',
+      }}>
+        <div style={{
+          background: '#fff', borderRadius: '12px', padding: '40px 36px', maxWidth: '380px', width: '100%',
+          boxShadow: '0 2px 12px rgba(0,0,0,0.08)', border: '1px solid #e3e8ee', textAlign: 'center',
+        }}>
+          <div style={{ fontSize: '36px', marginBottom: '12px' }}>🍶</div>
+          <h1 style={{ fontSize: '20px', color: '#0a2540', marginBottom: '6px', fontWeight: 700 }}>
+            Nutrition Data / 栄養成分データ
+          </h1>
+          <p style={{ fontSize: '13px', color: '#8898aa', marginBottom: '24px' }}>
+            Inserisci la password per accedere<br/>
+            アクセスするにはパスワードを入力してください
+          </p>
+          <form onSubmit={handlePasswordLogin}>
+            <input
+              type="password"
+              value={passwordInput}
+              onChange={e => { setPasswordInput(e.target.value); setPasswordError(false) }}
+              placeholder="Password"
+              autoFocus
+              style={{
+                width: '100%', padding: '11px 14px', border: `1.5px solid ${passwordError ? '#dc3545' : '#d8dee4'}`,
+                borderRadius: '8px', fontSize: '15px', outline: 'none', marginBottom: '12px',
+                fontFamily: 'inherit', boxSizing: 'border-box',
+                transition: 'border-color 0.15s',
+              }}
+            />
+            {passwordError && (
+              <p style={{ color: '#dc3545', fontSize: '12px', marginBottom: '12px', marginTop: '-4px' }}>
+                Password errata / パスワードが正しくありません
+              </p>
+            )}
+            <button
+              type="submit"
+              style={{
+                width: '100%', padding: '11px', background: '#635bff', color: '#fff',
+                border: 'none', borderRadius: '8px', fontSize: '15px', fontWeight: 600,
+                cursor: 'pointer', fontFamily: 'inherit',
+              }}
+            >
+              Accedi / ログイン
+            </button>
+          </form>
+        </div>
       </div>
     )
   }
