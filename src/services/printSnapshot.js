@@ -124,9 +124,12 @@ async function fetchSnapshots() {
 }
 
 /**
- * Write snapshots to GitHub
+ * Write snapshots to GitHub with retry on conflict (409).
+ * When multiple users generate labels simultaneously, the SHA can become stale.
+ * On conflict: re-fetch the file, merge our changes, and retry (up to 3 times).
  */
-async function writeSnapshots(data, sha) {
+async function writeSnapshots(data, sha, _retries = 0) {
+  const MAX_RETRIES = 3
   try {
     const content = btoa(unescape(encodeURIComponent(JSON.stringify(data, null, 2))))
     const url = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/${SNAPSHOT_PATH}`
@@ -148,9 +151,29 @@ async function writeSnapshots(data, sha) {
       body: JSON.stringify(body),
     })
 
+    if (res.status === 409 && _retries < MAX_RETRIES) {
+      // SHA conflict: another user saved between our read and write.
+      // Re-fetch, merge our data on top, and retry.
+      console.warn(`[PrintSnapshot] SHA conflict (attempt ${_retries + 1}/${MAX_RETRIES}), re-fetching and merging...`)
+      const fresh = await fetchSnapshots()
+      const merged = { ...fresh.data, ...data } // our data wins for keys we touched
+      _cache = merged
+      _cacheSha = fresh.sha
+      _cacheTime = Date.now()
+      // Small delay to avoid hammering
+      await new Promise(r => setTimeout(r, 300 + Math.random() * 500))
+      return writeSnapshots(merged, fresh.sha, _retries + 1)
+    }
+
     if (!res.ok) {
       const err = await res.json()
       throw new Error(err.message || res.statusText)
+    }
+
+    // Update cache SHA with the new value from the response
+    const result = await res.json()
+    if (result.content?.sha) {
+      _cacheSha = result.content.sha
     }
 
     console.log('[PrintSnapshot] Snapshots saved to GitHub')

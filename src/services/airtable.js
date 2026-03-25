@@ -89,6 +89,23 @@ const headers = () => ({
 })
 
 /**
+ * Fetch with automatic retry on Airtable rate-limit (429).
+ * Airtable allows 5 requests/sec per base; concurrent users may hit this.
+ */
+async function fetchWithRetry(url, options, retries = 3) {
+  for (let i = 0; i <= retries; i++) {
+    const res = await fetch(url, options)
+    if (res.status === 429 && i < retries) {
+      const wait = Math.pow(2, i) * 1000 + Math.random() * 500
+      console.warn(`[Airtable] Rate limited (429), retrying in ${Math.round(wait)}ms...`)
+      await new Promise(r => setTimeout(r, wait))
+      continue
+    }
+    return res
+  }
+}
+
+/**
  * Check if Airtable API is configured
  */
 export const isAirtableConfigured = () => {
@@ -115,7 +132,7 @@ export const fetchProducts = async () => {
   do {
     const url = `${API_BASE}/${AIRTABLE_BASE_ID}/${PRODUCT_TABLE_ID}?${fieldParams}${offset ? `&offset=${offset}` : ''}`
 
-    const response = await fetch(url, { headers: headers() })
+    const response = await fetchWithRetry(url, { headers: headers() })
 
     if (!response.ok) {
       const err = await response.json()
@@ -138,7 +155,7 @@ export const fetchProduct = async (recordId) => {
   if (!isAirtableConfigured()) return null
 
   const url = `${API_BASE}/${AIRTABLE_BASE_ID}/${PRODUCT_TABLE_ID}/${recordId}`
-  const response = await fetch(url, { headers: headers() })
+  const response = await fetchWithRetry(url, { headers: headers() })
 
   if (!response.ok) throw new Error('Failed to fetch product')
 
@@ -166,7 +183,7 @@ export const updateProduct = async (recordId, fields) => {
   }
 
   const url = `${API_BASE}/${AIRTABLE_BASE_ID}/${PRODUCT_TABLE_ID}/${recordId}`
-  const response = await fetch(url, {
+  const response = await fetchWithRetry(url, {
     method: 'PATCH',
     headers: headers(),
     body: JSON.stringify({ fields: airtableFields, typecast: true })
@@ -206,7 +223,7 @@ export const batchUpdateProducts = async (records) => {
     })
 
     const url = `${API_BASE}/${AIRTABLE_BASE_ID}/${PRODUCT_TABLE_ID}`
-    const response = await fetch(url, {
+    const response = await fetchWithRetry(url, {
       method: 'PATCH',
       headers: headers(),
       body: JSON.stringify({ records: airtableRecords, typecast: true })
