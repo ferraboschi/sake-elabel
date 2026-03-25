@@ -140,6 +140,7 @@ const AdminPage = () => {
           generating={labelGen.generating}
           allProducts={products.allProducts}
           setAllProducts={products.setAllProducts}
+          reprintStatus={products.reprintStatus}
         />
         {toast && <Toast message={toast} onClose={() => setToast(null)} />}
       </AdminLayout>

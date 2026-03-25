@@ -35,6 +35,7 @@ const ProductList = ({
     const pHasLabel = (labelsMap[p.slug]?.length > 0) || (labelsMap[p.code]?.length > 0)
     if (filterLabelStatus === 'with-label' && !pHasLabel) return false
     if (filterLabelStatus === 'without-label' && pHasLabel) return false
+    if (filterLabelStatus === 'needs-reprint' && !reprintStatus[p.code]?.needsReprint) return false
     if (searchQuery) {
       const q = searchQuery.toLowerCase()
       return (p.name || '').toLowerCase().includes(q)
@@ -106,14 +107,18 @@ const ProductList = ({
           value={filterLabelStatus}
           onChange={e => setFilterLabelStatus(e.target.value)}
           style={{
-            padding: '9px 12px', border: '1px solid #d8dee4',
-            borderRadius: '6px', fontSize: '13px', color: '#596780',
-            background: '#fff', minWidth: '150px',
+            padding: '9px 12px',
+            border: filterLabelStatus === 'needs-reprint' ? '2px solid #dc3545' : '1px solid #d8dee4',
+            borderRadius: '6px', fontSize: '13px',
+            color: filterLabelStatus === 'needs-reprint' ? '#842029' : '#596780',
+            background: filterLabelStatus === 'needs-reprint' ? '#fdf2f2' : '#fff',
+            minWidth: '150px', fontWeight: filterLabelStatus === 'needs-reprint' ? 600 : 400,
           }}
         >
           <option value="">Tutti</option>
           <option value="with-label">Con etichetta</option>
           <option value="without-label">Senza etichetta</option>
+          <option value="needs-reprint">Da ristampare</option>
         </select>
       </div>
 
@@ -248,6 +253,11 @@ const ProductList = ({
                         {product.volumeMl ? ` · ${product.volumeMl}ml` : ''}
                         {product.alcoholPct ? ` · ${product.alcoholPct}%` : ''}
                         {!isFamily && product.winery ? ` · ${product.winery}` : ''}
+                        {reprintStatus[product.code]?.printedAt && (
+                          <span style={{ color: needsReprint ? '#dc3545' : '#198754', marginLeft: '6px', fontSize: '10px', fontWeight: 600 }}>
+                            🖨 {new Date(reprintStatus[product.code].printedAt).toLocaleDateString('it-IT', { day: '2-digit', month: 'short' })}
+                          </span>
+                        )}
                       </div>
                       {/* Sales regions - only for non-family or first variant */}
                       {!isFamily && product.salesRegion?.length > 0 && (
@@ -347,14 +357,22 @@ const ProductList = ({
                     </div>
 
                     {/* Status */}
-                    <div style={{ textAlign: 'center' }}>
+                    <div style={{ textAlign: 'center' }} title={
+                      needsReprint
+                        ? `Ristampa: dati modificati dopo la stampa${reprintStatus[product.code]?.printedAt ? ` del ${new Date(reprintStatus[product.code].printedAt).toLocaleDateString('it-IT')}` : ''}`
+                        : !isComplete
+                        ? `Mancano: ${missing.join(', ')}`
+                        : reprintStatus[product.code]?.printedAt
+                        ? `Stampata il ${new Date(reprintStatus[product.code].printedAt).toLocaleDateString('it-IT')}`
+                        : ''
+                    }>
                       {needsReprint ? (
                         <Badge color="#842029" bg="#f8d7da">Ristampa</Badge>
-                      ) : isComplete ? (
+                      ) : hasLabel && isComplete ? (
                         <Badge color="#1e7a34" bg="#d4edda">OK</Badge>
-                      ) : (
+                      ) : !isComplete ? (
                         <Badge color="#856404" bg="#fff3cd">{missing.length} campo{missing.length > 1 ? 'i' : ''}</Badge>
-                      )}
+                      ) : null}
                     </div>
 
                     {/* Action */}

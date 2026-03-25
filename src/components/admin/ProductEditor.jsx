@@ -37,6 +37,7 @@ const ProductEditor = ({
   onGenerate,
   generating,
   allProducts, setAllProducts,
+  reprintStatus,
 }) => {
   const navigate = useNavigate()
 
@@ -113,6 +114,12 @@ const ProductEditor = ({
   const importer = importersForRegion.find(i => i.id === selectedImporterId) || importersForRegion[0] || null
   const hasValidImporter = importer && importer.name
 
+  // Reprint status for this product
+  const productReprint = reprintStatus?.[product.code] || {}
+  const needsReprint = productReprint.needsReprint
+  const printedAt = productReprint.printedAt
+  const hasPrintHistory = !!printedAt
+
   const handleGenerate = () => {
     const reviewEdits = { [product.slug]: re }
     onGenerate([product], {
@@ -166,6 +173,47 @@ const ProductEditor = ({
         allowedRegionCodes={allowedRegionCodes}
         importerVersion={importerVersion}
       />
+
+      {/* ======= REPRINT BANNER ======= */}
+      {needsReprint && (
+        <div style={{
+          ...sectionStyle,
+          borderLeft: '4px solid #dc3545',
+          background: '#fdf2f2',
+          borderColor: '#f5c2c7',
+          display: 'flex', alignItems: 'center', gap: '12px',
+          padding: '14px 20px',
+        }}>
+          <span style={{ fontSize: '20px' }}>⚠️</span>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: '14px', fontWeight: 600, color: '#842029' }}>
+              Ristampa necessaria
+            </div>
+            <div style={{ fontSize: '12px', color: '#842029', opacity: 0.8, marginTop: '2px' }}>
+              I dati sono stati modificati dopo l'ultima stampa
+              {printedAt && ` del ${new Date(printedAt).toLocaleDateString('it-IT', { day: '2-digit', month: 'short', year: 'numeric' })}`}.
+              Rigenera l'etichetta per aggiornare il PDF.
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ======= PRINT HISTORY BADGE ======= */}
+      {hasPrintHistory && !needsReprint && (
+        <div style={{
+          ...sectionStyle,
+          borderLeft: '4px solid #198754',
+          background: '#f0faf4',
+          borderColor: '#badbcc',
+          display: 'flex', alignItems: 'center', gap: '12px',
+          padding: '12px 20px',
+        }}>
+          <span style={{ fontSize: '16px' }}>✅</span>
+          <div style={{ fontSize: '13px', color: '#0f5132' }}>
+            Etichetta stampata il {new Date(printedAt).toLocaleDateString('it-IT', { day: '2-digit', month: 'short', year: 'numeric' })} — nessuna modifica pendente
+          </div>
+        </div>
+      )}
 
       {/* ======= SECTION 1: Label Data ======= */}
       <div style={sectionStyle}>
@@ -367,14 +415,19 @@ const ProductEditor = ({
             disabled={!isReady || !hasValidImporter || generating || allowedRegionCodes.length === 0}
             style={{
               padding: '10px 28px', fontSize: '15px', fontWeight: 600,
-              background: (isReady && hasValidImporter && !generating) ? '#635bff' : '#d8dee4',
+              background: !isReady || !hasValidImporter || generating ? '#d8dee4'
+                : needsReprint ? '#dc3545'
+                : '#635bff',
               color: '#fff', border: 'none', borderRadius: '8px',
               cursor: (isReady && hasValidImporter && !generating) ? 'pointer' : 'default',
               transition: 'all 0.15s',
               minWidth: '200px',
             }}
           >
-            {generating ? 'Generazione...' : 'Genera etichetta'}
+            {generating ? 'Generazione...'
+              : needsReprint ? '⚠ Rigenera etichetta'
+              : hasPrintHistory ? 'Genera nuova versione'
+              : 'Genera etichetta'}
           </button>
 
           {re.eanBox && (
