@@ -8,6 +8,28 @@ import { downloadBoxLabelPDF } from '../services/labelPrinter'
 const VALID_TOKENS = ['sake2026supplier', 'fornitore2026', 'supplier2026']
 const VALID_PASSWORDS = ['sake2026', 'fornitore2026']
 
+/**
+ * Normalize full-width (全角) characters to half-width (半角).
+ * Japanese keyboards often produce full-width alphanumeric: ｓａｋｅ２０２６ → sake2026
+ * Also normalizes full-width spaces, punctuation, etc.
+ */
+const normalizeFullWidth = (str) => {
+  if (!str) return str
+  return str
+    // Full-width alphanumeric and symbols (U+FF01-FF5E) → half-width (U+0021-007E)
+    .replace(/[\uff01-\uff5e]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 0xfee0))
+    // Full-width space → half-width space
+    .replace(/\u3000/g, ' ')
+}
+
+/**
+ * Normalize numeric input: full-width digits → half-width, strip non-numeric
+ */
+const normalizeNumeric = (str) => {
+  if (!str) return str
+  return normalizeFullWidth(str).replace(/[^0-9.]/g, '')
+}
+
 // Only show beverage products (exclude books, merch, display items, etc.)
 const BEVERAGE_CATEGORIES = new Set([
   'junmai', 'junmai ginjo', 'junmai daiginjo',
@@ -386,7 +408,8 @@ export default function SupplierPortal() {
 
   const handlePasswordLogin = (e) => {
     e.preventDefault()
-    if (VALID_PASSWORDS.includes(passwordInput.trim().toLowerCase())) {
+    const normalized = normalizeFullWidth(passwordInput).trim().toLowerCase()
+    if (VALID_PASSWORDS.includes(normalized)) {
       setLoggedInViaPassword(true)
       setPasswordError(false)
     } else {

@@ -12,6 +12,15 @@ import TopBar from './TopBar'
  * URL: /admin/product/:slug
  */
 
+/** Normalize full-width (全角) → half-width (半角) for Japanese keyboards */
+const normalizeFullWidth = (str) => {
+  if (!str) return str
+  return str
+    .replace(/[\uff01-\uff5e]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 0xfee0))
+    .replace(/\u3000/g, ' ')
+}
+const toHalfWidthNum = (str) => normalizeFullWidth(str || '').replace(/[^0-9.]/g, '')
+
 const inputStyle = {
   width: '100%', padding: '9px 12px', border: '1px solid #d8dee4',
   borderRadius: '6px', fontSize: '14px', color: '#0a2540', outline: 'none',
@@ -311,10 +320,10 @@ const ProductEditor = ({
           <div>
             <label style={{ ...fieldLabelStyle, ...(!re.alcoholPct ? emptyLabel : {}) }}>Alcool % / アルコール度数{!re.alcoholPct && ' *'}</label>
             <input
-              type="number"
-              step="0.1"
+              type="text"
+              inputMode="decimal"
               value={re.alcoholPct || ''}
-              onChange={e => updateField('alcoholPct', e.target.value)}
+              onChange={e => updateField('alcoholPct', toHalfWidthNum(e.target.value))}
               onBlur={e => autoSave('alcoholPct', e.target.value)}
               style={{ ...inputStyle, maxWidth: '160px', ...(!re.alcoholPct ? emptyBorder : {}) }}
             />
@@ -324,9 +333,10 @@ const ProductEditor = ({
           <div>
             <label style={fieldLabelStyle}>Volume (ml) / 容量</label>
             <input
-              type="number"
+              type="text"
+              inputMode="numeric"
               value={re.volumeMl || ''}
-              onChange={e => updateField('volumeMl', e.target.value)}
+              onChange={e => updateField('volumeMl', toHalfWidthNum(e.target.value).replace(/\./g, ''))}
               onBlur={e => autoSave('volumeMl', e.target.value)}
               style={{ ...inputStyle, maxWidth: '160px' }}
             />
@@ -372,7 +382,7 @@ const ProductEditor = ({
               inputMode="numeric"
               value={product.barcode || ''}
               onChange={e => {
-                const val = e.target.value.replace(/[^0-9]/g, '').slice(0, 13)
+                const val = normalizeFullWidth(e.target.value).replace(/[^0-9]/g, '').slice(0, 13)
                 setAllProducts(prev => prev.map(p =>
                   p.slug === product.slug ? { ...p, barcode: val } : p
                 ))
@@ -391,7 +401,7 @@ const ProductEditor = ({
               type="text"
               inputMode="numeric"
               value={re.eanBox || ''}
-              onChange={e => updateField('eanBox', e.target.value)}
+              onChange={e => updateField('eanBox', normalizeFullWidth(e.target.value).replace(/[^0-9]/g, ''))}
               onBlur={e => autoSave('eanBox', e.target.value)}
               placeholder="13 cifre"
               style={{ ...inputStyle, fontFamily: 'ui-monospace, monospace' }}
