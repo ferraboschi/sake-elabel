@@ -137,7 +137,9 @@ export function useProducts() {
 
     setEanSaving(prev => ({ ...prev, [recordId]: true }))
     try {
-      await updateProduct(recordId, { ean: eanVal ? parseInt(eanVal, 10) : 0 })
+      const payload = { barcode: eanVal || '' }
+      if (eanVal && eanVal.length === 13) payload.ean = parseInt(eanVal, 10)
+      await updateProduct(recordId, payload)
       setAllProducts(prev => prev.map(p =>
         p._recordId === recordId ? { ...p, barcode: eanVal } : p
       ))

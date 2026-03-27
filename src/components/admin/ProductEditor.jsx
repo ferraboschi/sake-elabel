@@ -95,8 +95,8 @@ const ProductEditor = ({
     if (!product._recordId || !isAirtableConfigured()) return
     const fieldMap = {
       legalDescription: { legalDescription: value },
-      ingredients: { [`ingredients_${selectedLanguage}`]: value },
-      allergens: { [`allergens_${selectedLanguage}`]: value },
+      ingredients: { [`ingredients${selectedLanguage.charAt(0).toUpperCase()}${selectedLanguage.slice(1)}`]: value },
+      allergens: { [`allergens${selectedLanguage.charAt(0).toUpperCase()}${selectedLanguage.slice(1)}`]: value },
       alcoholPct: value ? { alcoholPct: parseFloat(value) } : null,
       volumeMl: value ? { volumeMl: parseInt(value) } : null,
       countryOfOrigin: { countryOfOrigin: value },
@@ -388,8 +388,11 @@ const ProductEditor = ({
                 ))
               }}
               onBlur={e => {
-                if (product._recordId && isAirtableConfigured() && e.target.value.length === 13) {
-                  updateProduct(product._recordId, { ean: parseInt(e.target.value, 10) }).catch(err => console.warn('[EAN]', err.message))
+                if (product._recordId && isAirtableConfigured()) {
+                  const val = e.target.value
+                  const payload = { barcode: val }
+                  if (val.length === 13) payload.ean = parseInt(val, 10)
+                  updateProduct(product._recordId, payload).catch(err => console.warn('[EAN]', err.message))
                 }
               }}
               style={{ ...inputStyle, fontFamily: 'ui-monospace, monospace', ...(!product.barcode ? emptyBorder : {}) }}

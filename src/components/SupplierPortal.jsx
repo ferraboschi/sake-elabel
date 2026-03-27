@@ -619,7 +619,8 @@ export default function SupplierPortal() {
         const itemPayload = { ...payload }
         const eanVal = eanEditData[item._recordId]
         if (eanVal !== undefined && eanVal !== '') {
-          itemPayload.ean = parseInt(eanVal, 10) || 0
+          itemPayload.barcode = eanVal
+          if (eanVal.length === 13) itemPayload.ean = parseInt(eanVal, 10)
         }
         const eanBoxVal = eanBoxEditData[item._recordId]
         if (eanBoxVal !== undefined && eanBoxVal !== '') {
