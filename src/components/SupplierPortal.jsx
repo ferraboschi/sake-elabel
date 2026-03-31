@@ -4,6 +4,7 @@ import { fetchProducts, updateProduct, isAirtableConfigured } from '../services/
 import { translateIngredients as autoTranslateIngredients, autoFillIngredients } from '../services/ingredientTranslator'
 import { useGenerateLabel } from '../hooks/useGenerateLabel'
 import { downloadBoxLabelPDF } from '../services/labelPrinter'
+import { batchCheckReprint } from '../services/printSnapshot'
 
 const VALID_TOKENS = ['sake2026supplier', 'fornitore2026', 'supplier2026']
 const VALID_PASSWORDS = ['sake2026', 'fornitore2026']
@@ -391,7 +392,8 @@ export default function SupplierPortal() {
   const [saving, setSaving] = useState({})
   const [saved, setSaved] = useState({})
   const [confirmed, setConfirmed] = useState({})
-  const [showCompleted, setShowCompleted] = useState(false) // collapse/expand completed section
+  const [statusFilter, setStatusFilter] = useState('all') // 'all' | 'todo' | 'done'
+  const [reprintStatus, setReprintStatus] = useState({}) // code → { needsReprint, printedAt }
   const [copySource, setCopySource] = useState(null) // groupKey
   const [savedAt, setSavedAt] = useState({}) // groupKey → Date
   const [printingGroup, setPrintingGroup] = useState(null)
@@ -427,6 +429,8 @@ export default function SupplierPortal() {
       setLoading(true)
       const all = await fetchProducts()
       setProducts(all)
+      // Check reprint status in background
+      batchCheckReprint(all).then(status => setReprintStatus(status)).catch(() => {})
     } catch (err) {
       setError(err.message)
     } finally {
@@ -489,20 +493,14 @@ export default function SupplierPortal() {
         )
         if (!match) continue
       }
-      result.push({ key, items })
+      // Status filter
+      const groupDone = items.some(p => hasData(p)) || items.every(p => confirmed[p._recordId])
+      if (statusFilter === 'done' && !groupDone) continue
+      if (statusFilter === 'todo' && groupDone) continue
+      result.push({ key, items, _done: groupDone })
     }
     return result
-  }, [productGroups, producerFilter, productFilter])
-
-  // Split filtered groups into todo / done
-  const todoGroups = useMemo(() =>
-    filteredGroups.filter(g => !(g.items.some(p => hasData(p)) || g.items.every(p => confirmed[p._recordId]))),
-    [filteredGroups, confirmed]
-  )
-  const doneGroups = useMemo(() =>
-    filteredGroups.filter(g => g.items.some(p => hasData(p)) || g.items.every(p => confirmed[p._recordId])),
-    [filteredGroups, confirmed]
-  )
+  }, [productGroups, producerFilter, productFilter, statusFilter, confirmed])
 
   // Use the first (largest) product as the "representative" for edit data
   const getGroupEditValues = (group) => {
@@ -648,6 +646,17 @@ export default function SupplierPortal() {
       setSaved(prev => ({ ...prev, ...savedState }))
       setSavedAt(prev => ({ ...prev, [group.key]: new Date() }))
       if (autoConfirm) setConfirmed(prev => ({ ...prev, ...confirmedState }))
+      // Mark items as needing reprint if they had been printed before
+      setReprintStatus(prev => {
+        const updated = { ...prev }
+        items.forEach(p => {
+          const key = p.code || p._recordId
+          if (updated[key]?.printedAt) {
+            updated[key] = { ...updated[key], needsReprint: true }
+          }
+        })
+        return updated
+      })
     } catch (err) {
       alert(`${lang === 'jp' ? '保存エラー' : 'Errore salvataggio'} ${items[0].name}: ${err.message}`)
     } finally {
@@ -675,6 +684,8 @@ export default function SupplierPortal() {
         selectedCountry: 'Italia',
         importer: { name: 'Sake Company srl', address: 'Via Bianca di Savoia 17, Milano - Italia' },
       })
+      // Clear reprint flag after successful print
+      setReprintStatus(prev => ({ ...prev, [item.code]: { needsReprint: false, printedAt: new Date().toISOString() } }))
     } catch (err) {
       console.error('Print label failed:', err)
       alert(`Errore stampa: ${err.message}`)
@@ -927,7 +938,26 @@ export default function SupplierPortal() {
         </div>
       </div>
 
-      {/* Status summary inline */}
+      {/* Status filter: Tutti / Da fare / Completati */}
+      <div style={{ display: 'flex', gap: '0', marginBottom: '16px' }}>
+        {[
+          { key: 'all', label: lang === 'jp' ? 'すべて' : 'Tutti', count: totalGroups },
+          { key: 'todo', label: lang === 'jp' ? '残り' : 'Da fare', count: remainingGroups },
+          { key: 'done', label: lang === 'jp' ? '完了' : 'Completati', count: completedGroups },
+        ].map((opt, i) => (
+          <button key={opt.key} onClick={() => setStatusFilter(opt.key)}
+            style={{
+              padding: '7px 18px', fontSize: '13px', fontWeight: 600, cursor: 'pointer',
+              border: '1px solid #ccc',
+              borderLeft: i === 0 ? '1px solid #ccc' : 'none',
+              borderRadius: i === 0 ? '6px 0 0 6px' : i === 2 ? '0 6px 6px 0' : '0',
+              background: statusFilter === opt.key ? '#1565c0' : '#fff',
+              color: statusFilter === opt.key ? '#fff' : '#555',
+            }}>
+            {opt.label} ({opt.count})
+          </button>
+        ))}
+      </div>
 
       {/* Copy mode sticky banner */}
       {copySource && copySourceGroup && (
@@ -984,33 +1014,25 @@ export default function SupplierPortal() {
         </div>
       </div>
 
-      {/* ===== DA FARE section ===== */}
-      {todoGroups.length === 0 && doneGroups.length > 0 && (
-        <div style={{
-          textAlign: 'center', padding: '24px', marginBottom: '24px',
-          background: '#e8f5e9', borderRadius: '12px', border: '1px solid #c8e6c9',
-        }}>
-          <p style={{ fontSize: '18px', margin: '0 0 4px', color: '#2e7d32', fontWeight: 700 }}>
-            🎉 {t.allConfirmed}
-          </p>
-          <p style={{ fontSize: '14px', margin: 0, color: '#666' }}>
-            {doneGroups.length} {t.confirmedProducts}
-          </p>
+      {/* Product cards */}
+      {filteredGroups.length === 0 ? (
+        <div style={{ textAlign: 'center', color: '#888', padding: '40px' }}>
+          {statusFilter === 'todo' && completedGroups > 0 ? (
+            <div>
+              <p style={{ fontSize: '18px', marginBottom: '8px' }}>🎉 {t.allConfirmed}</p>
+              <p style={{ fontSize: '14px' }}>{completedGroups} {t.confirmedProducts}</p>
+              <button onClick={() => setStatusFilter('all')}
+                style={{ marginTop: '12px', padding: '8px 20px', fontSize: '14px', background: '#f5f5f5', border: '1px solid #ccc', borderRadius: '6px', cursor: 'pointer', color: '#555' }}>
+                {t.showAll}
+              </button>
+            </div>
+          ) : (
+            <p>{t.noProducts}</p>
+          )}
         </div>
-      )}
-      {todoGroups.length > 0 && (
-        <div style={{ marginBottom: '32px' }}>
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px',
-            padding: '10px 16px', background: '#fff3e0', borderRadius: '8px', border: '1px solid #ffe0b2',
-          }}>
-            <span style={{ fontSize: '18px' }}>📋</span>
-            <span style={{ fontSize: '15px', fontWeight: 700, color: '#e65100' }}>
-              {lang === 'jp' ? '残り' : 'Da fare'} ({todoGroups.length})
-            </span>
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            {todoGroups.map((group) => {
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          {filteredGroups.map((group) => {
             const product = group.items[0] // representative
             const primaryRecordId = product._recordId
             const values = { ...getGroupEditValues(group), ...editData[primaryRecordId] }
@@ -1287,6 +1309,11 @@ export default function SupplierPortal() {
                     const itemHasAlcohol = (values.alcoholPct !== '' && parseFloat(values.alcoholPct) > 0) || (item.alcoholPct > 0)
                     const itemHasIngredients = (values.ingredientsIt || '').trim().length > 0 || !!(item.ingredients?.it || '').trim()
                     const itemCanPrint = itemHasAlcohol && itemHasIngredients
+                    const missingFields = []
+                    if (!itemHasAlcohol) missingFields.push(lang === 'jp' ? 'アルコール' : 'Alcol')
+                    if (!itemHasIngredients) missingFields.push(lang === 'jp' ? '原材料' : 'Ingredienti')
+                    const itemReprint = reprintStatus[item.code] || {}
+                    const itemNeedsReprint = itemReprint.needsReprint
                     const itemIsPrinting = printingGroup === item._recordId
                     const itemHasBoxEan = !!(item.barcodeBox || eanBoxEditData[item._recordId])
                     const itemHasBottlesPerBox = !!(getBottlesPerBoxValue(item))
@@ -1374,20 +1401,35 @@ export default function SupplierPortal() {
 
                       {/* PRINT BUTTONS — right aligned */}
                       <div style={{ ...cellStyle, marginLeft: 'auto' }}>
-                        <span style={labelStyle}>{lang === 'jp' ? '印刷' : 'Stampa'}</span>
+                        <span style={labelStyle}>
+                          {lang === 'jp' ? '印刷' : 'Stampa'}
+                          {itemNeedsReprint && (
+                            <span style={{ color: '#d32f2f', marginLeft: '4px', fontWeight: 700, textTransform: 'none' }}
+                              title={lang === 'jp' ? 'データ変更後、未再印刷' : 'Modificato dopo la stampa — da ristampare'}>
+                              ⚠ {lang === 'jp' ? '要再印刷' : 'Ristampa'}
+                            </span>
+                          )}
+                        </span>
+                        {!itemCanPrint && (
+                          <span style={{ fontSize: '10px', color: '#d32f2f', fontWeight: 500 }}>
+                            {lang === 'jp' ? '不足: ' : 'Manca: '}{missingFields.join(', ')}
+                          </span>
+                        )}
                         <div style={{ display: 'flex', gap: '5px' }}>
                           {/* Bottle label */}
                           <button onClick={() => handlePrintLabel(item)}
                             disabled={!itemCanPrint || itemIsPrinting}
-                            title={lang === 'jp' ? 'ボトルラベル' : 'Etichetta bottiglia'}
+                            title={!itemCanPrint
+                              ? (lang === 'jp' ? `不足: ${missingFields.join(', ')}` : `Manca: ${missingFields.join(', ')}`)
+                              : (lang === 'jp' ? 'ボトルラベル' : 'Etichetta bottiglia')}
                             style={{
                               padding: '4px 10px', fontSize: '12px', fontWeight: 600,
-                              background: !itemCanPrint ? '#e0e0e0' : itemIsPrinting ? '#ccc' : '#7b1fa2',
+                              background: !itemCanPrint ? '#e0e0e0' : itemNeedsReprint ? '#d32f2f' : itemIsPrinting ? '#ccc' : '#7b1fa2',
                               color: '#fff', border: 'none', borderRadius: '5px',
                               cursor: !itemCanPrint || itemIsPrinting ? 'default' : 'pointer',
                               whiteSpace: 'nowrap', opacity: !itemCanPrint ? 0.5 : 1,
                             }}>
-                            {itemIsPrinting ? '...' : '🍶'}
+                            {itemIsPrinting ? '...' : itemNeedsReprint ? '🍶 !' : '🍶'}
                           </button>
                           {/* Box label */}
                           <button onClick={() => {
@@ -1434,75 +1476,6 @@ export default function SupplierPortal() {
               </div>
             )
           })}
-          </div>
-        </div>
-      )}
-
-      {/* ===== COMPLETATI section ===== */}
-      {doneGroups.length > 0 && (
-        <div style={{ marginBottom: '16px' }}>
-          <button onClick={() => setShowCompleted(prev => !prev)}
-            style={{
-              display: 'flex', alignItems: 'center', gap: '10px', width: '100%',
-              padding: '10px 16px', background: '#e8f5e9', borderRadius: '8px', border: '1px solid #c8e6c9',
-              cursor: 'pointer', marginBottom: showCompleted ? '14px' : '0',
-              transition: 'margin-bottom 0.2s',
-            }}>
-            <span style={{ fontSize: '18px' }}>✅</span>
-            <span style={{ fontSize: '15px', fontWeight: 700, color: '#2e7d32' }}>
-              {lang === 'jp' ? '完了' : 'Completati'} ({doneGroups.length})
-            </span>
-            <span style={{ marginLeft: 'auto', fontSize: '13px', color: '#666' }}>
-              {showCompleted ? (lang === 'jp' ? '▲ 非表示' : '▲ Nascondi') : (lang === 'jp' ? '▼ 表示' : '▼ Mostra')}
-            </span>
-          </button>
-          {showCompleted && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              {doneGroups.map((group) => {
-                const product = group.items[0]
-                const primaryRecordId = product._recordId
-                const values = { ...getGroupEditValues(group), ...editData[primaryRecordId] }
-                const isSaving = group.items.some(p => saving[p._recordId])
-                const isSaved = group.items.every(p => saved[p._recordId])
-                const alreadyHasData = groupHasData(group)
-                const isCopySource = copySource === group.key
-                const hasSiblings = group.items.length > 1
-                const category = product.category || ''
-                const suggestion = getIngredientSuggestion(category, lang === 'jp' ? 'jp' : 'it', product.name)
-                const currentIngredients = values.ingredientsIt || ''
-                const bg = isCopySource ? '#fff8e1' : '#f1f8e9'
-                return (
-                  <div key={group.key} style={{
-                    border: '1px solid #c8e6c9', borderRadius: '12px', background: bg, padding: '16px',
-                    opacity: 0.85, transition: 'all 0.2s ease',
-                  }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
-                      <div>
-                        <span style={{ fontSize: '15px', fontWeight: 700, color: '#2e7d32' }}>
-                          ✓ {lang === 'jp' && product.nameJp ? product.nameJp : product.name}
-                        </span>
-                        <span style={{ fontSize: '12px', color: '#888', marginLeft: '8px' }}>
-                          {product.code} · {group.items.map(it => `${it.volumeMl || '?'}ml`).join(', ')}
-                        </span>
-                      </div>
-                      <div style={{ display: 'flex', gap: '6px' }}>
-                        <span style={{ fontSize: '12px', color: '#2e7d32', fontWeight: 600, padding: '3px 10px', background: '#c8e6c9', borderRadius: '4px' }}>
-                          {lang === 'jp' ? '完了' : 'Completato'}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Empty state */}
-      {filteredGroups.length === 0 && (
-        <div style={{ textAlign: 'center', color: '#888', padding: '40px' }}>
-          <p>{t.noProducts}</p>
         </div>
       )}
 
