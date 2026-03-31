@@ -29,11 +29,12 @@ function App() {
     <Suspense fallback={<Loading />}>
       <Routes>
         {/* Public routes */}
-        <Route path="/" element={<Dashboard />} />
+        <Route path="/" element={<SupplierPortal />} />
         <Route path="/login" element={<Login />} />
         <Route path="/nutrition" element={<SupplierPortal />} />
         <Route path="/supplier" element={<SupplierPortal />} />
         <Route path="/s" element={<SupplierPortal />} />
+        <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/label/:productSlug" element={<ELabel />} />
         <Route path="/product/:productSlug" element={<ELabel />} />
 

@@ -5,6 +5,8 @@ import { translateIngredients as autoTranslateIngredients, autoFillIngredients }
 import { useGenerateLabel } from '../hooks/useGenerateLabel'
 import { downloadBoxLabelPDF } from '../services/labelPrinter'
 import { batchCheckReprint } from '../services/printSnapshot'
+import { LANG_OPTIONS } from '../config/constants'
+import { getAllImporters, addCustomImporter, REGION_CODE_LABELS, getImportersForRegion } from '../data/importers'
 
 const VALID_TOKENS = ['sake2026supplier', 'fornitore2026', 'supplier2026']
 const VALID_PASSWORDS = ['sake2026', 'fornitore2026']
@@ -399,6 +401,12 @@ export default function SupplierPortal() {
   const [printingGroup, setPrintingGroup] = useState(null)
   const [printingBoxGroup, setPrintingBoxGroup] = useState(null)
   const [printingQRGroup, setPrintingQRGroup] = useState(null)
+  // Per-item print settings: recordId → { lang, regionCode, importerId, perText }
+  const [itemPrintSettings, setItemPrintSettings] = useState({})
+  const [newImporterMode, setNewImporterMode] = useState(null) // recordId that is adding importer
+  const [newImporterName, setNewImporterName] = useState('')
+  const [newImporterAddress, setNewImporterAddress] = useState('')
+  const [allImporters, setAllImporters] = useState([])
   const { generate, generating: generatingLabel, generateQR } = useGenerateLabel()
   const [producerFilter, setProducerFilter] = useState(producerParam.replace(/[-_]/g, ' '))
   const [productFilter, setProductFilter] = useState('')
@@ -431,6 +439,8 @@ export default function SupplierPortal() {
       setProducts(all)
       // Check reprint status in background
       batchCheckReprint(all).then(status => setReprintStatus(status)).catch(() => {})
+      // Load importers
+      setAllImporters(getAllImporters())
     } catch (err) {
       setError(err.message)
     } finally {
@@ -579,6 +589,35 @@ export default function SupplierPortal() {
     setSaved(prev => ({ ...prev, ...newSaved }))
   }
 
+  // Per-item print settings helpers
+  const getItemPrintSettings = (recordId) => {
+    return itemPrintSettings[recordId] || { lang: 'it', regionCode: 'ITA', importerId: 'default-it', perText: '' }
+  }
+  const updateItemPrintSetting = (recordId, key, value) => {
+    setItemPrintSettings(prev => ({
+      ...prev,
+      [recordId]: { ...getItemPrintSettings(recordId), [key]: value }
+    }))
+  }
+  const getImporterForItem = (recordId) => {
+    const settings = getItemPrintSettings(recordId)
+    return allImporters.find(i => i.id === settings.importerId) || allImporters[0] || { name: 'Sake Company srl', address: 'Via Bianca di Savoia 17, Milano - Italia' }
+  }
+  const handleAddImporter = (recordId) => {
+    if (!newImporterName.trim()) return
+    const created = addCustomImporter({
+      name: newImporterName.trim(),
+      address: newImporterAddress.trim(),
+      country: 'Italia',
+      regionCode: 'ITA',
+    })
+    setAllImporters(getAllImporters())
+    updateItemPrintSetting(recordId, 'importerId', created.id)
+    setNewImporterMode(null)
+    setNewImporterName('')
+    setNewImporterAddress('')
+  }
+
   const saveGroup = async (group, autoConfirm = false) => {
     const items = group.items
     const primaryRecord = items[0]._recordId
@@ -672,19 +711,22 @@ export default function SupplierPortal() {
   const handlePrintLabel = async (item) => {
     setPrintingGroup(item._recordId)
     try {
+      const settings = getItemPrintSettings(item._recordId)
+      const importer = getImporterForItem(item._recordId)
+      const regionInfo = REGION_CODE_LABELS[settings.regionCode] || { label: 'Italia', lang: 'it' }
       const allProducts = await fetchProducts()
       const freshProduct = allProducts.find(p => p.slug === item.slug) || item
       const filledProduct = {
         ...freshProduct,
         ingredients: autoFillIngredients(freshProduct.ingredients),
         allergens: autoFillIngredients(freshProduct.allergens),
+        perText: settings.perText || '',
       }
       await generate([filledProduct], {
-        selectedLanguage: 'it',
-        selectedCountry: 'Italia',
-        importer: { name: 'Sake Company srl', address: 'Via Bianca di Savoia 17, Milano - Italia' },
+        selectedLanguage: settings.lang,
+        selectedCountry: regionInfo.label,
+        importer,
       })
-      // Clear reprint flag after successful print
       setReprintStatus(prev => ({ ...prev, [item.code]: { needsReprint: false, printedAt: new Date().toISOString() } }))
     } catch (err) {
       console.error('Print label failed:', err)
@@ -697,20 +739,24 @@ export default function SupplierPortal() {
   const handlePrintBox = async (item) => {
     setPrintingBoxGroup(item._recordId)
     try {
+      const settings = getItemPrintSettings(item._recordId)
+      const importer = getImporterForItem(item._recordId)
+      const regionInfo = REGION_CODE_LABELS[settings.regionCode] || { label: 'Italia', lang: 'it' }
       const allProducts = await fetchProducts()
       const freshProduct = allProducts.find(p => p.slug === item.slug) || item
       const filledProduct = {
         ...freshProduct,
         ingredients: autoFillIngredients(freshProduct.ingredients),
         allergens: autoFillIngredients(freshProduct.allergens),
+        perText: settings.perText || '',
       }
-      const qr = await generateQR(filledProduct.slug, 'it', 'Italia')
+      const qr = await generateQR(filledProduct.slug, settings.lang, regionInfo.label)
       const boxLabel = {
         ...filledProduct,
         qr,
-        language: 'it',
-        country: 'Italia',
-        importer: { name: 'Sake Company srl', address: 'Via Bianca di Savoia 17, Milano - Italia' },
+        language: settings.lang,
+        country: regionInfo.label,
+        importer,
       }
       await downloadBoxLabelPDF(boxLabel)
     } catch (err) {
@@ -724,7 +770,9 @@ export default function SupplierPortal() {
   const handlePrintQR = async (item) => {
     setPrintingQRGroup(item._recordId)
     try {
-      const qrDataUrl = await generateQR(item.slug, 'it', 'Italia')
+      const settings = getItemPrintSettings(item._recordId)
+      const regionInfo = REGION_CODE_LABELS[settings.regionCode] || { label: 'Italia', lang: 'it' }
+      const qrDataUrl = await generateQR(item.slug, settings.lang, regionInfo.label)
       // Download QR as PNG
       const link = document.createElement('a')
       link.download = `QR_${item.slug}.png`
@@ -1397,6 +1445,119 @@ export default function SupplierPortal() {
                             background: getEanBoxValue(item) ? '#fff8e1' : '#fff',
                           }}
                         />
+                      </div>
+
+                      {/* --- PRINT SETTINGS ROW --- */}
+                      <div style={{ width: '100%', display: 'flex', alignItems: 'flex-end', gap: '12px', flexWrap: 'wrap', marginTop: '4px', paddingTop: '6px', borderTop: '1px dashed #e0e0e0' }}>
+                        {/* Lingua etichetta */}
+                        <div style={cellStyle}>
+                          <span style={{ ...labelStyle, color: '#7b1fa2' }}>
+                            {lang === 'jp' ? '言語' : 'Lingua'}
+                          </span>
+                          <select
+                            value={getItemPrintSettings(item._recordId).lang}
+                            onChange={e => updateItemPrintSetting(item._recordId, 'lang', e.target.value)}
+                            style={{ ...inputBase, width: '100px', border: '1px solid #ce93d8', background: '#fce4ec', cursor: 'pointer' }}
+                          >
+                            {LANG_OPTIONS.map(lo => (
+                              <option key={lo.code} value={lo.code}>{lo.flag} {lo.label}</option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* Paese destinazione */}
+                        <div style={cellStyle}>
+                          <span style={{ ...labelStyle, color: '#e65100' }}>
+                            {lang === 'jp' ? '仕向地' : 'Paese'}
+                          </span>
+                          <select
+                            value={getItemPrintSettings(item._recordId).regionCode}
+                            onChange={e => {
+                              const rc = e.target.value
+                              updateItemPrintSetting(item._recordId, 'regionCode', rc)
+                              // Auto-update language based on region
+                              const regionInfo = REGION_CODE_LABELS[rc]
+                              if (regionInfo?.lang) updateItemPrintSetting(item._recordId, 'lang', regionInfo.lang)
+                              // Auto-select first available importer for this region
+                              const regionImporters = getImportersForRegion(rc, { onlyComplete: true })
+                              if (regionImporters.length > 0) {
+                                updateItemPrintSetting(item._recordId, 'importerId', regionImporters[0].id)
+                              }
+                            }}
+                            style={{ ...inputBase, width: '130px', border: '1px solid #ffcc80', background: '#fff8e1', cursor: 'pointer' }}
+                          >
+                            {Object.entries(REGION_CODE_LABELS).map(([code, info]) => (
+                              <option key={code} value={code}>{info.label}</option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* Importatore */}
+                        <div style={cellStyle}>
+                          <span style={{ ...labelStyle, color: '#1565c0' }}>
+                            {lang === 'jp' ? '輸入者' : 'Importatore'}
+                          </span>
+                          {newImporterMode === item._recordId ? (
+                            <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                              <input type="text" placeholder={lang === 'jp' ? '名前' : 'Nome'}
+                                value={newImporterName}
+                                onChange={e => setNewImporterName(e.target.value)}
+                                style={{ ...inputBase, width: '120px', border: '1px solid #90caf9' }}
+                              />
+                              <input type="text" placeholder={lang === 'jp' ? '住所' : 'Indirizzo'}
+                                value={newImporterAddress}
+                                onChange={e => setNewImporterAddress(e.target.value)}
+                                style={{ ...inputBase, width: '160px', border: '1px solid #90caf9' }}
+                              />
+                              <button onClick={() => handleAddImporter(item._recordId)}
+                                style={{ padding: '4px 8px', fontSize: '11px', background: '#1565c0', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
+                                ✓
+                              </button>
+                              <button onClick={() => { setNewImporterMode(null); setNewImporterName(''); setNewImporterAddress('') }}
+                                style={{ padding: '4px 8px', fontSize: '11px', background: '#e0e0e0', color: '#333', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
+                                ✗
+                              </button>
+                            </div>
+                          ) : (
+                            <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                              <select
+                                value={getItemPrintSettings(item._recordId).importerId}
+                                onChange={e => updateItemPrintSetting(item._recordId, 'importerId', e.target.value)}
+                                style={{ ...inputBase, width: '200px', border: '1px solid #90caf9', background: '#e3f2fd', cursor: 'pointer' }}
+                              >
+                                {allImporters.map(imp => (
+                                  <option key={imp.id} value={imp.id}>{imp.name}{imp.address ? ` — ${imp.address}` : ''}</option>
+                                ))}
+                              </select>
+                              <button onClick={() => setNewImporterMode(item._recordId)}
+                                title={lang === 'jp' ? '新規輸入者' : 'Nuovo importatore'}
+                                style={{ padding: '4px 8px', fontSize: '14px', background: '#e3f2fd', color: '#1565c0', border: '1px solid #90caf9', borderRadius: '4px', cursor: 'pointer', fontWeight: 700, lineHeight: 1 }}>
+                                +
+                              </button>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Per: campo testo libero */}
+                        <div style={cellStyle}>
+                          <span style={{ ...labelStyle, color: '#6a1b9a' }}>
+                            Per:
+                          </span>
+                          <input type="text"
+                            placeholder={lang === 'jp' ? '例: Xin Shi 88 srl' : 'es. Xin Shi 88 srl'}
+                            maxLength={35}
+                            value={getItemPrintSettings(item._recordId).perText}
+                            onChange={e => updateItemPrintSetting(item._recordId, 'perText', e.target.value)}
+                            style={{
+                              ...inputBase, width: '200px',
+                              border: '1px solid #ce93d8',
+                              background: getItemPrintSettings(item._recordId).perText ? '#f3e5f5' : '#fff',
+                            }}
+                          />
+                          <span style={{ fontSize: '9px', color: '#999' }}>
+                            {(getItemPrintSettings(item._recordId).perText || '').length}/35
+                          </span>
+                        </div>
                       </div>
 
                       {/* PRINT BUTTONS — right aligned */}
