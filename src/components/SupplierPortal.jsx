@@ -391,7 +391,7 @@ export default function SupplierPortal() {
   const [saving, setSaving] = useState({})
   const [saved, setSaved] = useState({})
   const [confirmed, setConfirmed] = useState({})
-  const [statusFilter, setStatusFilter] = useState('todo') // 'all' | 'todo' | 'done'
+  const [showCompleted, setShowCompleted] = useState(false) // collapse/expand completed section
   const [copySource, setCopySource] = useState(null) // groupKey
   const [savedAt, setSavedAt] = useState({}) // groupKey → Date
   const [printingGroup, setPrintingGroup] = useState(null)
@@ -489,14 +489,20 @@ export default function SupplierPortal() {
         )
         if (!match) continue
       }
-      // Status filter: done = has data or confirmed, todo = neither
-      const groupDone = items.some(p => hasData(p)) || items.every(p => confirmed[p._recordId])
-      if (statusFilter === 'done' && !groupDone) continue
-      if (statusFilter === 'todo' && groupDone) continue
       result.push({ key, items })
     }
     return result
-  }, [productGroups, producerFilter, productFilter, statusFilter, confirmed])
+  }, [productGroups, producerFilter, productFilter])
+
+  // Split filtered groups into todo / done
+  const todoGroups = useMemo(() =>
+    filteredGroups.filter(g => !(g.items.some(p => hasData(p)) || g.items.every(p => confirmed[p._recordId]))),
+    [filteredGroups, confirmed]
+  )
+  const doneGroups = useMemo(() =>
+    filteredGroups.filter(g => g.items.some(p => hasData(p)) || g.items.every(p => confirmed[p._recordId])),
+    [filteredGroups, confirmed]
+  )
 
   // Use the first (largest) product as the "representative" for edit data
   const getGroupEditValues = (group) => {
@@ -921,26 +927,7 @@ export default function SupplierPortal() {
         </div>
       </div>
 
-      {/* Status filter: Tutti / Da fare / Completati */}
-      <div style={{ display: 'flex', gap: '0', marginBottom: '16px' }}>
-        {[
-          { key: 'all', label: lang === 'jp' ? 'すべて' : 'Tutti', count: totalGroups },
-          { key: 'todo', label: lang === 'jp' ? '残り' : 'Da fare', count: remainingGroups },
-          { key: 'done', label: lang === 'jp' ? '完了' : 'Completati', count: completedGroups },
-        ].map((opt, i) => (
-          <button key={opt.key} onClick={() => setStatusFilter(opt.key)}
-            style={{
-              padding: '7px 18px', fontSize: '13px', fontWeight: 600, cursor: 'pointer',
-              border: '1px solid #ccc',
-              borderLeft: i === 0 ? '1px solid #ccc' : 'none',
-              borderRadius: i === 0 ? '6px 0 0 6px' : i === 2 ? '0 6px 6px 0' : '0',
-              background: statusFilter === opt.key ? '#1565c0' : '#fff',
-              color: statusFilter === opt.key ? '#fff' : '#555',
-            }}>
-            {opt.label} ({opt.count})
-          </button>
-        ))}
-      </div>
+      {/* Status summary inline */}
 
       {/* Copy mode sticky banner */}
       {copySource && copySourceGroup && (
@@ -997,25 +984,33 @@ export default function SupplierPortal() {
         </div>
       </div>
 
-      {/* Product cards */}
-      {filteredGroups.length === 0 ? (
-        <div style={{ textAlign: 'center', color: '#888', padding: '40px' }}>
-          {statusFilter === 'todo' && completedGroups > 0 ? (
-            <div>
-              <p style={{ fontSize: '18px', marginBottom: '8px' }}>{t.allConfirmed}</p>
-              <p style={{ fontSize: '14px' }}>{completedGroups} {t.confirmedProducts}</p>
-              <button onClick={() => setStatusFilter('all')}
-                style={{ marginTop: '12px', padding: '8px 20px', fontSize: '14px', background: '#f5f5f5', border: '1px solid #ccc', borderRadius: '6px', cursor: 'pointer', color: '#555' }}>
-                {t.showAll}
-              </button>
-            </div>
-          ) : (
-            <p>{t.noProducts}</p>
-          )}
+      {/* ===== DA FARE section ===== */}
+      {todoGroups.length === 0 && doneGroups.length > 0 && (
+        <div style={{
+          textAlign: 'center', padding: '24px', marginBottom: '24px',
+          background: '#e8f5e9', borderRadius: '12px', border: '1px solid #c8e6c9',
+        }}>
+          <p style={{ fontSize: '18px', margin: '0 0 4px', color: '#2e7d32', fontWeight: 700 }}>
+            🎉 {t.allConfirmed}
+          </p>
+          <p style={{ fontSize: '14px', margin: 0, color: '#666' }}>
+            {doneGroups.length} {t.confirmedProducts}
+          </p>
         </div>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          {filteredGroups.map((group) => {
+      )}
+      {todoGroups.length > 0 && (
+        <div style={{ marginBottom: '32px' }}>
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px',
+            padding: '10px 16px', background: '#fff3e0', borderRadius: '8px', border: '1px solid #ffe0b2',
+          }}>
+            <span style={{ fontSize: '18px' }}>📋</span>
+            <span style={{ fontSize: '15px', fontWeight: 700, color: '#e65100' }}>
+              {lang === 'jp' ? '残り' : 'Da fare'} ({todoGroups.length})
+            </span>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            {todoGroups.map((group) => {
             const product = group.items[0] // representative
             const primaryRecordId = product._recordId
             const values = { ...getGroupEditValues(group), ...editData[primaryRecordId] }
@@ -1439,6 +1434,75 @@ export default function SupplierPortal() {
               </div>
             )
           })}
+          </div>
+        </div>
+      )}
+
+      {/* ===== COMPLETATI section ===== */}
+      {doneGroups.length > 0 && (
+        <div style={{ marginBottom: '16px' }}>
+          <button onClick={() => setShowCompleted(prev => !prev)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: '10px', width: '100%',
+              padding: '10px 16px', background: '#e8f5e9', borderRadius: '8px', border: '1px solid #c8e6c9',
+              cursor: 'pointer', marginBottom: showCompleted ? '14px' : '0',
+              transition: 'margin-bottom 0.2s',
+            }}>
+            <span style={{ fontSize: '18px' }}>✅</span>
+            <span style={{ fontSize: '15px', fontWeight: 700, color: '#2e7d32' }}>
+              {lang === 'jp' ? '完了' : 'Completati'} ({doneGroups.length})
+            </span>
+            <span style={{ marginLeft: 'auto', fontSize: '13px', color: '#666' }}>
+              {showCompleted ? (lang === 'jp' ? '▲ 非表示' : '▲ Nascondi') : (lang === 'jp' ? '▼ 表示' : '▼ Mostra')}
+            </span>
+          </button>
+          {showCompleted && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              {doneGroups.map((group) => {
+                const product = group.items[0]
+                const primaryRecordId = product._recordId
+                const values = { ...getGroupEditValues(group), ...editData[primaryRecordId] }
+                const isSaving = group.items.some(p => saving[p._recordId])
+                const isSaved = group.items.every(p => saved[p._recordId])
+                const alreadyHasData = groupHasData(group)
+                const isCopySource = copySource === group.key
+                const hasSiblings = group.items.length > 1
+                const category = product.category || ''
+                const suggestion = getIngredientSuggestion(category, lang === 'jp' ? 'jp' : 'it', product.name)
+                const currentIngredients = values.ingredientsIt || ''
+                const bg = isCopySource ? '#fff8e1' : '#f1f8e9'
+                return (
+                  <div key={group.key} style={{
+                    border: '1px solid #c8e6c9', borderRadius: '12px', background: bg, padding: '16px',
+                    opacity: 0.85, transition: 'all 0.2s ease',
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+                      <div>
+                        <span style={{ fontSize: '15px', fontWeight: 700, color: '#2e7d32' }}>
+                          ✓ {lang === 'jp' && product.nameJp ? product.nameJp : product.name}
+                        </span>
+                        <span style={{ fontSize: '12px', color: '#888', marginLeft: '8px' }}>
+                          {product.code} · {group.items.map(it => `${it.volumeMl || '?'}ml`).join(', ')}
+                        </span>
+                      </div>
+                      <div style={{ display: 'flex', gap: '6px' }}>
+                        <span style={{ fontSize: '12px', color: '#2e7d32', fontWeight: 600, padding: '3px 10px', background: '#c8e6c9', borderRadius: '4px' }}>
+                          {lang === 'jp' ? '完了' : 'Completato'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Empty state */}
+      {filteredGroups.length === 0 && (
+        <div style={{ textAlign: 'center', color: '#888', padding: '40px' }}>
+          <p>{t.noProducts}</p>
         </div>
       )}
 
