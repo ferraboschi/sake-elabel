@@ -588,21 +588,21 @@ export default function SupplierPortal() {
     setSaved(prev => ({ ...prev, ...newSaved }))
   }
 
-  // Per-item print settings helpers
-  const getItemPrintSettings = (recordId) => {
-    return itemPrintSettings[recordId] || { lang: 'it', regionCode: 'ITA', importerId: 'default-it', perText: '' }
+  // Per-group print settings helpers (keyed by group key, shared across all sizes)
+  const getGroupPrintSettings = (groupKey) => {
+    return itemPrintSettings[groupKey] || { lang: 'it', regionCode: 'ITA', importerId: 'default-it', perText: '' }
   }
-  const updateItemPrintSetting = (recordId, key, value) => {
+  const updateGroupPrintSetting = (groupKey, key, value) => {
     setItemPrintSettings(prev => ({
       ...prev,
-      [recordId]: { ...getItemPrintSettings(recordId), [key]: value }
+      [groupKey]: { ...getGroupPrintSettings(groupKey), [key]: value }
     }))
   }
-  const getImporterForItem = (recordId) => {
-    const settings = getItemPrintSettings(recordId)
+  const getImporterForGroup = (groupKey) => {
+    const settings = getGroupPrintSettings(groupKey)
     return allImporters.find(i => i.id === settings.importerId) || allImporters[0] || { name: 'Sake Company srl', address: 'Via Bianca di Savoia 17, Milano - Italia' }
   }
-  const openImporterModal = (recordId, editImporter = null) => {
+  const openImporterModal = (groupKey, editImporter = null) => {
     if (editImporter) {
       setModalForm({
         name: editImporter.name || '',
@@ -612,10 +612,10 @@ export default function SupplierPortal() {
         regionCode: editImporter.regionCode || Object.entries(REGION_CODE_LABELS).find(([, v]) => v.lang === editImporter.lang)?.[0] || 'ITA',
       })
     } else {
-      const settings = getItemPrintSettings(recordId)
+      const settings = getGroupPrintSettings(groupKey)
       setModalForm({ name: '', address: '', website: '', lang: settings.lang, regionCode: settings.regionCode })
     }
-    setImporterModal({ recordId, editing: editImporter })
+    setImporterModal({ groupKey, editing: editImporter })
   }
   const saveImporterModal = () => {
     if (!modalForm.name.trim()) return
@@ -632,7 +632,6 @@ export default function SupplierPortal() {
     if (importerModal.editing) {
       const imp = importerModal.editing
       if (imp._default) {
-        // editing a default importer — save as override
         updateDefaultImporter(imp._country, data)
       } else {
         updateCustomImporter(imp.id, data)
@@ -643,15 +642,15 @@ export default function SupplierPortal() {
       selectedId = created.id
     }
     setAllImporters(getAllImporters())
-    if (importerModal.recordId) {
-      updateItemPrintSetting(importerModal.recordId, 'importerId', selectedId)
-      updateItemPrintSetting(importerModal.recordId, 'lang', modalForm.lang)
-      updateItemPrintSetting(importerModal.recordId, 'regionCode', modalForm.regionCode)
+    if (importerModal.groupKey) {
+      updateGroupPrintSetting(importerModal.groupKey, 'importerId', selectedId)
+      updateGroupPrintSetting(importerModal.groupKey, 'lang', modalForm.lang)
+      updateGroupPrintSetting(importerModal.groupKey, 'regionCode', modalForm.regionCode)
     }
     setImporterModal(null)
   }
   const deleteImporter = (imp) => {
-    if (imp._default) return // can't delete built-in
+    if (imp._default) return
     if (!confirm(`Eliminare ${imp.name}?`)) return
     removeCustomImporter(imp.id)
     setAllImporters(getAllImporters())
@@ -747,11 +746,11 @@ export default function SupplierPortal() {
   const saveAndConfirm = (group) => saveGroup(group, true)
   const saveAll = async () => { for (const g of filteredGroups) await saveGroup(g) }
 
-  const handlePrintLabel = async (item) => {
+  const handlePrintLabel = async (item, groupKey) => {
     setPrintingGroup(item._recordId)
     try {
-      const settings = getItemPrintSettings(item._recordId)
-      const importer = getImporterForItem(item._recordId)
+      const settings = getGroupPrintSettings(groupKey)
+      const importer = getImporterForGroup(groupKey)
       const regionInfo = REGION_CODE_LABELS[settings.regionCode] || { label: 'Italia', lang: 'it' }
       const allProducts = await fetchProducts()
       const freshProduct = allProducts.find(p => p.slug === item.slug) || item
@@ -775,11 +774,11 @@ export default function SupplierPortal() {
     }
   }
 
-  const handlePrintBox = async (item) => {
+  const handlePrintBox = async (item, groupKey) => {
     setPrintingBoxGroup(item._recordId)
     try {
-      const settings = getItemPrintSettings(item._recordId)
-      const importer = getImporterForItem(item._recordId)
+      const settings = getGroupPrintSettings(groupKey)
+      const importer = getImporterForGroup(groupKey)
       const regionInfo = REGION_CODE_LABELS[settings.regionCode] || { label: 'Italia', lang: 'it' }
       const allProducts = await fetchProducts()
       const freshProduct = allProducts.find(p => p.slug === item.slug) || item
@@ -806,10 +805,10 @@ export default function SupplierPortal() {
     }
   }
 
-  const handlePrintQR = async (item) => {
+  const handlePrintQR = async (item, groupKey) => {
     setPrintingQRGroup(item._recordId)
     try {
-      const settings = getItemPrintSettings(item._recordId)
+      const settings = getGroupPrintSettings(groupKey)
       const regionInfo = REGION_CODE_LABELS[settings.regionCode] || { label: 'Italia', lang: 'it' }
       const qrDataUrl = await generateQR(item.slug, settings.lang, regionInfo.label)
       // Download QR as PNG
@@ -1486,160 +1485,144 @@ export default function SupplierPortal() {
                         />
                       </div>
 
-                      {/* --- PRINT SETTINGS + BUTTONS (single row, full width) --- */}
-                      {(() => {
-                        const ps = getItemPrintSettings(item._recordId)
-                        const currentImporter = getImporterForItem(item._recordId)
-                        return (
-                        <div style={{ width: '100%', display: 'flex', alignItems: 'flex-end', gap: '10px', flexWrap: 'wrap', marginTop: '4px', paddingTop: '6px', borderTop: '1px dashed #e0e0e0' }}>
-                          {/* Importatore — select + edit button */}
-                          <div style={{ ...cellStyle, flex: '1 1 auto', minWidth: '180px' }}>
-                            <span style={{ ...labelStyle, color: '#1565c0' }}>
-                              {lang === 'jp' ? '輸入者' : 'Importatore'}
-                            </span>
-                            <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-                              <select
-                                value={ps.importerId}
-                                onChange={e => {
-                                  const selId = e.target.value
-                                  updateItemPrintSetting(item._recordId, 'importerId', selId)
-                                  // Auto-sync lingua + paese from importer
-                                  const imp = allImporters.find(i => i.id === selId)
-                                  if (imp) {
-                                    if (imp.lang) updateItemPrintSetting(item._recordId, 'lang', imp.lang)
-                                    if (imp.regionCode) updateItemPrintSetting(item._recordId, 'regionCode', imp.regionCode)
-                                    else {
-                                      const rc = Object.entries(REGION_CODE_LABELS).find(([, v]) => v.lang === imp.lang)?.[0]
-                                      if (rc) updateItemPrintSetting(item._recordId, 'regionCode', rc)
-                                    }
-                                  }
-                                }}
-                                style={{ ...inputBase, flex: 1, minWidth: '120px', border: '1px solid #90caf9', background: '#e3f2fd', cursor: 'pointer' }}
-                              >
-                                {allImporters.map(imp => (
-                                  <option key={imp.id} value={imp.id}>{imp.name}{imp.address ? ` — ${imp.address}` : ''}</option>
-                                ))}
-                              </select>
-                              <button onClick={() => openImporterModal(item._recordId, currentImporter)}
-                                title={lang === 'jp' ? '編集' : 'Modifica importatore'}
-                                style={{ padding: '3px 7px', fontSize: '11px', background: '#e3f2fd', color: '#1565c0', border: '1px solid #90caf9', borderRadius: '4px', cursor: 'pointer', fontWeight: 600 }}>
-                                ✎
-                              </button>
-                              <button onClick={() => openImporterModal(item._recordId)}
-                                title={lang === 'jp' ? '新規' : 'Nuovo'}
-                                style={{ padding: '3px 7px', fontSize: '14px', background: '#1565c0', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 700, lineHeight: 1 }}>
-                                +
-                              </button>
-                            </div>
-                          </div>
-
-                          {/* Lingua */}
-                          <div style={cellStyle}>
-                            <span style={{ ...labelStyle, color: '#7b1fa2' }}>{lang === 'jp' ? '言語' : 'Lingua'}</span>
-                            <select
-                              value={ps.lang}
-                              onChange={e => updateItemPrintSetting(item._recordId, 'lang', e.target.value)}
-                              style={{ ...inputBase, width: '90px', border: '1px solid #ce93d8', background: '#fce4ec', cursor: 'pointer' }}
-                            >
-                              {LANG_OPTIONS.map(lo => (
-                                <option key={lo.code} value={lo.code}>{lo.flag} {lo.label}</option>
-                              ))}
-                            </select>
-                          </div>
-
-                          {/* Paese */}
-                          <div style={cellStyle}>
-                            <span style={{ ...labelStyle, color: '#e65100' }}>{lang === 'jp' ? '仕向地' : 'Paese'}</span>
-                            <select
-                              value={ps.regionCode}
-                              onChange={e => {
-                                const rc = e.target.value
-                                updateItemPrintSetting(item._recordId, 'regionCode', rc)
-                                const regionInfo = REGION_CODE_LABELS[rc]
-                                if (regionInfo?.lang) updateItemPrintSetting(item._recordId, 'lang', regionInfo.lang)
-                                const regionImporters = getImportersForRegion(rc, { onlyComplete: true })
-                                if (regionImporters.length > 0) updateItemPrintSetting(item._recordId, 'importerId', regionImporters[0].id)
-                              }}
-                              style={{ ...inputBase, width: '110px', border: '1px solid #ffcc80', background: '#fff8e1', cursor: 'pointer' }}
-                            >
-                              {Object.entries(REGION_CODE_LABELS).map(([code, info]) => (
-                                <option key={code} value={code}>{info.label}</option>
-                              ))}
-                            </select>
-                          </div>
-
-                          {/* Per: */}
-                          <div style={cellStyle}>
-                            <span style={{ ...labelStyle, color: '#6a1b9a' }}>Per: <span style={{ fontSize: '9px', fontWeight: 400, color: '#999', textTransform: 'none' }}>{(ps.perText || '').length}/35</span></span>
-                            <input type="text"
-                              placeholder="es. Xin Shi 88 srl"
-                              maxLength={35}
-                              value={ps.perText}
-                              onChange={e => updateItemPrintSetting(item._recordId, 'perText', e.target.value)}
-                              style={{ ...inputBase, width: '300px', border: '1px solid #ce93d8', background: ps.perText ? '#f3e5f5' : '#fff' }}
-                            />
-                          </div>
-
-                          {/* Stampa */}
-                          <div style={{ ...cellStyle, marginLeft: 'auto' }}>
-                            <span style={labelStyle}>
-                              {lang === 'jp' ? '印刷' : 'Stampa'}
-                              {itemNeedsReprint && (
-                                <span style={{ color: '#d32f2f', marginLeft: '4px', fontWeight: 700, textTransform: 'none' }}>⚠</span>
-                              )}
-                              {!itemCanPrint && (
-                                <span style={{ color: '#d32f2f', marginLeft: '4px', fontWeight: 500, fontSize: '9px', textTransform: 'none' }}>
-                                  ({missingFields.join(', ')})
-                                </span>
-                              )}
-                            </span>
-                            <div style={{ display: 'flex', gap: '4px' }}>
-                              <button onClick={() => handlePrintLabel(item)}
-                                disabled={!itemCanPrint || itemIsPrinting}
-                                title={!itemCanPrint ? `Manca: ${missingFields.join(', ')}` : 'Etichetta bottiglia'}
-                                style={{
-                                  padding: '4px 10px', fontSize: '12px', fontWeight: 600,
-                                  background: !itemCanPrint ? '#e0e0e0' : itemNeedsReprint ? '#d32f2f' : itemIsPrinting ? '#ccc' : '#7b1fa2',
-                                  color: '#fff', border: 'none', borderRadius: '5px',
-                                  cursor: !itemCanPrint || itemIsPrinting ? 'default' : 'pointer',
-                                  whiteSpace: 'nowrap', opacity: !itemCanPrint ? 0.5 : 1,
-                                }}>
-                                {itemIsPrinting ? '...' : itemNeedsReprint ? '🍶!' : '🍶'}
-                              </button>
-                              <button onClick={() => {
-                                  if (!itemHasBottlesPerBox) { alert('Manca il numero di bottiglie per box'); return }
-                                  handlePrintBox(item)
-                                }}
-                                disabled={!itemCanPrint || itemIsPrintingBox}
-                                title="Etichetta box"
-                                style={{
-                                  padding: '4px 10px', fontSize: '12px', fontWeight: 600,
-                                  background: !itemCanPrint ? '#e0e0e0' : itemIsPrintingBox ? '#ccc' : '#e65100',
-                                  color: '#fff', border: 'none', borderRadius: '5px',
-                                  cursor: !itemCanPrint || itemIsPrintingBox ? 'default' : 'pointer',
-                                  whiteSpace: 'nowrap', opacity: !itemCanPrint ? 0.5 : 1,
-                                }}>
-                                {itemIsPrintingBox ? '...' : '📦'}
-                              </button>
-                              <button onClick={() => handlePrintQR(item)}
-                                disabled={itemIsPrintingQR}
-                                title="QR Code"
-                                style={{
-                                  padding: '4px 10px', fontSize: '12px', fontWeight: 600,
-                                  background: itemIsPrintingQR ? '#ccc' : '#1565c0',
-                                  color: '#fff', border: 'none', borderRadius: '5px',
-                                  cursor: itemIsPrintingQR ? 'default' : 'pointer', whiteSpace: 'nowrap',
-                                }}>
-                                {itemIsPrintingQR ? '...' : 'QR'}
-                              </button>
-                            </div>
-                          </div>
+                      {/* Stampa buttons — per item, right aligned */}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', marginLeft: 'auto' }}>
+                        <span style={{ fontSize: '10px', color: '#5c6bc0', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.3px' }}>
+                          {lang === 'jp' ? '印刷' : 'Stampa'}
+                          {itemNeedsReprint && <span style={{ color: '#d32f2f', marginLeft: '4px', fontWeight: 700, textTransform: 'none' }}>⚠</span>}
+                          {!itemCanPrint && <span style={{ color: '#d32f2f', marginLeft: '4px', fontWeight: 500, fontSize: '9px', textTransform: 'none' }}>({missingFields.join(', ')})</span>}
+                        </span>
+                        <div style={{ display: 'flex', gap: '4px' }}>
+                          <button onClick={() => handlePrintLabel(item, group.key)}
+                            disabled={!itemCanPrint || itemIsPrinting}
+                            title={!itemCanPrint ? `Manca: ${missingFields.join(', ')}` : 'Etichetta bottiglia'}
+                            style={{
+                              padding: '4px 10px', fontSize: '12px', fontWeight: 600,
+                              background: !itemCanPrint ? '#e0e0e0' : itemNeedsReprint ? '#d32f2f' : itemIsPrinting ? '#ccc' : '#7b1fa2',
+                              color: '#fff', border: 'none', borderRadius: '5px',
+                              cursor: !itemCanPrint || itemIsPrinting ? 'default' : 'pointer',
+                              whiteSpace: 'nowrap', opacity: !itemCanPrint ? 0.5 : 1,
+                            }}>
+                            {itemIsPrinting ? '...' : itemNeedsReprint ? '🍶!' : '🍶'}
+                          </button>
+                          <button onClick={() => {
+                              if (!itemHasBottlesPerBox) { alert('Manca il numero di bottiglie per box'); return }
+                              handlePrintBox(item, group.key)
+                            }}
+                            disabled={!itemCanPrint || itemIsPrintingBox}
+                            title="Etichetta box"
+                            style={{
+                              padding: '4px 10px', fontSize: '12px', fontWeight: 600,
+                              background: !itemCanPrint ? '#e0e0e0' : itemIsPrintingBox ? '#ccc' : '#e65100',
+                              color: '#fff', border: 'none', borderRadius: '5px',
+                              cursor: !itemCanPrint || itemIsPrintingBox ? 'default' : 'pointer',
+                              whiteSpace: 'nowrap', opacity: !itemCanPrint ? 0.5 : 1,
+                            }}>
+                            {itemIsPrintingBox ? '...' : '📦'}
+                          </button>
+                          <button onClick={() => handlePrintQR(item, group.key)}
+                            disabled={itemIsPrintingQR}
+                            title="QR Code"
+                            style={{
+                              padding: '4px 10px', fontSize: '12px', fontWeight: 600,
+                              background: itemIsPrintingQR ? '#ccc' : '#1565c0',
+                              color: '#fff', border: 'none', borderRadius: '5px',
+                              cursor: itemIsPrintingQR ? 'default' : 'pointer', whiteSpace: 'nowrap',
+                            }}>
+                            {itemIsPrintingQR ? '...' : 'QR'}
+                          </button>
                         </div>
-                        )
-                      })()}
+                      </div>
                     </div>
                     )
                   })}
+
+                  {/* --- GROUP-LEVEL PRINT SETTINGS (once per sake) --- */}
+                  {(() => {
+                    const ps = getGroupPrintSettings(group.key)
+                    const currentImporter = getImporterForGroup(group.key)
+                    const cellStyle = { display: 'flex', flexDirection: 'column', gap: '2px' }
+                    const labelStyle = { fontSize: '10px', color: '#5c6bc0', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.3px' }
+                    const inputBase = { padding: '5px 8px', fontSize: '13px', borderRadius: '5px', fontFamily: 'monospace', letterSpacing: '0.5px', outline: 'none' }
+                    return (
+                    <div style={{ display: 'flex', alignItems: 'flex-end', gap: '10px', flexWrap: 'wrap', marginTop: '10px', paddingTop: '8px', borderTop: '1px solid #c5cae9' }}>
+                      {/* Importatore */}
+                      <div style={{ ...cellStyle, flex: '1 1 auto', minWidth: '180px' }}>
+                        <span style={{ ...labelStyle, color: '#1565c0' }}>{lang === 'jp' ? '輸入者' : 'Importatore'}</span>
+                        <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                          <select value={ps.importerId}
+                            onChange={e => {
+                              const selId = e.target.value
+                              updateGroupPrintSetting(group.key, 'importerId', selId)
+                              const imp = allImporters.find(i => i.id === selId)
+                              if (imp) {
+                                if (imp.lang) updateGroupPrintSetting(group.key, 'lang', imp.lang)
+                                if (imp.regionCode) updateGroupPrintSetting(group.key, 'regionCode', imp.regionCode)
+                                else {
+                                  const rc = Object.entries(REGION_CODE_LABELS).find(([, v]) => v.lang === imp.lang)?.[0]
+                                  if (rc) updateGroupPrintSetting(group.key, 'regionCode', rc)
+                                }
+                              }
+                            }}
+                            style={{ ...inputBase, flex: 1, minWidth: '120px', border: '1px solid #90caf9', background: '#e3f2fd', cursor: 'pointer' }}>
+                            {allImporters.map(imp => (
+                              <option key={imp.id} value={imp.id}>{imp.name}{imp.address ? ` — ${imp.address}` : ''}</option>
+                            ))}
+                          </select>
+                          <button onClick={() => openImporterModal(group.key, currentImporter)}
+                            title={lang === 'jp' ? '編集' : 'Modifica'}
+                            style={{ padding: '3px 7px', fontSize: '11px', background: '#e3f2fd', color: '#1565c0', border: '1px solid #90caf9', borderRadius: '4px', cursor: 'pointer', fontWeight: 600 }}>
+                            ✎
+                          </button>
+                          <button onClick={() => openImporterModal(group.key)}
+                            title={lang === 'jp' ? '新規' : 'Nuovo'}
+                            style={{ padding: '3px 7px', fontSize: '14px', background: '#1565c0', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 700, lineHeight: 1 }}>
+                            +
+                          </button>
+                        </div>
+                      </div>
+                      {/* Lingua */}
+                      <div style={cellStyle}>
+                        <span style={{ ...labelStyle, color: '#7b1fa2' }}>{lang === 'jp' ? '言語' : 'Lingua'}</span>
+                        <select value={ps.lang}
+                          onChange={e => updateGroupPrintSetting(group.key, 'lang', e.target.value)}
+                          style={{ ...inputBase, width: '90px', border: '1px solid #ce93d8', background: '#fce4ec', cursor: 'pointer' }}>
+                          {LANG_OPTIONS.map(lo => (
+                            <option key={lo.code} value={lo.code}>{lo.flag} {lo.label}</option>
+                          ))}
+                        </select>
+                      </div>
+                      {/* Paese */}
+                      <div style={cellStyle}>
+                        <span style={{ ...labelStyle, color: '#e65100' }}>{lang === 'jp' ? '仕向地' : 'Paese'}</span>
+                        <select value={ps.regionCode}
+                          onChange={e => {
+                            const rc = e.target.value
+                            updateGroupPrintSetting(group.key, 'regionCode', rc)
+                            const regionInfo = REGION_CODE_LABELS[rc]
+                            if (regionInfo?.lang) updateGroupPrintSetting(group.key, 'lang', regionInfo.lang)
+                            const regionImporters = getImportersForRegion(rc, { onlyComplete: true })
+                            if (regionImporters.length > 0) updateGroupPrintSetting(group.key, 'importerId', regionImporters[0].id)
+                          }}
+                          style={{ ...inputBase, width: '110px', border: '1px solid #ffcc80', background: '#fff8e1', cursor: 'pointer' }}>
+                          {Object.entries(REGION_CODE_LABELS).map(([code, info]) => (
+                            <option key={code} value={code}>{info.label}</option>
+                          ))}
+                        </select>
+                      </div>
+                      {/* Per: */}
+                      <div style={cellStyle}>
+                        <span style={{ ...labelStyle, color: '#6a1b9a' }}>Per: <span style={{ fontSize: '9px', fontWeight: 400, color: '#999', textTransform: 'none' }}>{(ps.perText || '').length}/35</span></span>
+                        <input type="text" placeholder="es. Xin Shi 88 srl" maxLength={35}
+                          value={ps.perText}
+                          onChange={e => updateGroupPrintSetting(group.key, 'perText', e.target.value)}
+                          style={{ ...inputBase, width: '300px', border: '1px solid #ce93d8', background: ps.perText ? '#f3e5f5' : '#fff' }}
+                        />
+                      </div>
+                    </div>
+                    )
+                  })()}
+
                   <div style={{ fontSize: '10px', color: '#7986cb', marginTop: '4px', fontStyle: 'italic' }}>
                     {t.eanBoxNote}
                   </div>
