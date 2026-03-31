@@ -593,10 +593,17 @@ export default function SupplierPortal() {
     return itemPrintSettings[groupKey] || { lang: 'it', regionCode: 'ITA', importerId: 'default-it', perText: '' }
   }
   const updateGroupPrintSetting = (groupKey, key, value) => {
-    setItemPrintSettings(prev => ({
-      ...prev,
-      [groupKey]: { ...getGroupPrintSettings(groupKey), [key]: value }
-    }))
+    setItemPrintSettings(prev => {
+      const current = prev[groupKey] || { lang: 'it', regionCode: 'ITA', importerId: 'default-it', perText: '' }
+      return { ...prev, [groupKey]: { ...current, [key]: value } }
+    })
+  }
+  // Batch update multiple settings at once (avoids stale closure issues)
+  const updateGroupPrintSettings = (groupKey, updates) => {
+    setItemPrintSettings(prev => {
+      const current = prev[groupKey] || { lang: 'it', regionCode: 'ITA', importerId: 'default-it', perText: '' }
+      return { ...prev, [groupKey]: { ...current, ...updates } }
+    })
   }
   const getImporterForGroup = (groupKey) => {
     const settings = getGroupPrintSettings(groupKey)
@@ -643,9 +650,11 @@ export default function SupplierPortal() {
     }
     setAllImporters(getAllImporters())
     if (importerModal.groupKey) {
-      updateGroupPrintSetting(importerModal.groupKey, 'importerId', selectedId)
-      updateGroupPrintSetting(importerModal.groupKey, 'lang', modalForm.lang)
-      updateGroupPrintSetting(importerModal.groupKey, 'regionCode', modalForm.regionCode)
+      updateGroupPrintSettings(importerModal.groupKey, {
+        importerId: selectedId,
+        lang: modalForm.lang,
+        regionCode: modalForm.regionCode,
+      })
     }
     setImporterModal(null)
   }
@@ -1553,16 +1562,17 @@ export default function SupplierPortal() {
                           <select value={ps.importerId}
                             onChange={e => {
                               const selId = e.target.value
-                              updateGroupPrintSetting(group.key, 'importerId', selId)
                               const imp = allImporters.find(i => i.id === selId)
+                              const updates = { importerId: selId }
                               if (imp) {
-                                if (imp.lang) updateGroupPrintSetting(group.key, 'lang', imp.lang)
-                                if (imp.regionCode) updateGroupPrintSetting(group.key, 'regionCode', imp.regionCode)
+                                if (imp.lang) updates.lang = imp.lang
+                                if (imp.regionCode) updates.regionCode = imp.regionCode
                                 else {
                                   const rc = Object.entries(REGION_CODE_LABELS).find(([, v]) => v.lang === imp.lang)?.[0]
-                                  if (rc) updateGroupPrintSetting(group.key, 'regionCode', rc)
+                                  if (rc) updates.regionCode = rc
                                 }
                               }
+                              updateGroupPrintSettings(group.key, updates)
                             }}
                             style={{ ...inputBase, flex: 1, minWidth: '120px', border: '1px solid #90caf9', background: '#e3f2fd', cursor: 'pointer' }}>
                             {allImporters.map(imp => (
@@ -1598,11 +1608,12 @@ export default function SupplierPortal() {
                         <select value={ps.regionCode}
                           onChange={e => {
                             const rc = e.target.value
-                            updateGroupPrintSetting(group.key, 'regionCode', rc)
+                            const updates = { regionCode: rc }
                             const regionInfo = REGION_CODE_LABELS[rc]
-                            if (regionInfo?.lang) updateGroupPrintSetting(group.key, 'lang', regionInfo.lang)
+                            if (regionInfo?.lang) updates.lang = regionInfo.lang
                             const regionImporters = getImportersForRegion(rc, { onlyComplete: true })
-                            if (regionImporters.length > 0) updateGroupPrintSetting(group.key, 'importerId', regionImporters[0].id)
+                            if (regionImporters.length > 0) updates.importerId = regionImporters[0].id
+                            updateGroupPrintSettings(group.key, updates)
                           }}
                           style={{ ...inputBase, width: '110px', border: '1px solid #ffcc80', background: '#fff8e1', cursor: 'pointer' }}>
                           {Object.entries(REGION_CODE_LABELS).map(([code, info]) => (
