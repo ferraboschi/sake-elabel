@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { fetchProducts, updateProduct, isAirtableConfigured } from '../services/airtable'
-import { translateIngredients as autoTranslateIngredients, autoFillIngredients } from '../services/ingredientTranslator'
+import { translateIngredients as autoTranslateIngredients, autoFillIngredients, detectLanguage as detectIngredientLang } from '../services/ingredientTranslator'
 import { useGenerateLabel } from '../hooks/useGenerateLabel'
 import { downloadBoxLabelPDF } from '../services/labelPrinter'
 import { batchCheckReprint } from '../services/printSnapshot'
@@ -688,9 +688,21 @@ export default function SupplierPortal() {
         saltG: parseFloat(values.saltG) || 0,
         ingredientsIt: normalizeJapaneseInput(values.ingredientsIt, false) || '',
       }
-      // Auto-translate ingredients to all other Airtable languages
-      const rawIngredients = payload.ingredientsIt
+      // Auto-detect ingredient language and translate if needed
+      let rawIngredients = payload.ingredientsIt
       if (rawIngredients) {
+        const detectedLang = detectIngredientLang(rawIngredients)
+        // If ingredients are NOT in Italian (e.g. Japanese supplier entered JP text),
+        // translate to Italian and save the original in the detected language field
+        if (detectedLang !== 'it') {
+          const { text: italianText } = autoTranslateIngredients(rawIngredients, 'it', detectedLang)
+          if (italianText) {
+            console.log(`[Supplier] Ingredients detected as '${detectedLang}', auto-translated to Italian`)
+            payload.ingredientsIt = italianText
+            rawIngredients = italianText
+          }
+        }
+        // Auto-translate Italian ingredients to all other Airtable languages
         const langMap = { en: 'En', de: 'De', fr: 'Fr', es: 'Es' }
         for (const [lang, suffix] of Object.entries(langMap)) {
           const { text } = autoTranslateIngredients(rawIngredients, lang)
@@ -723,6 +735,13 @@ export default function SupplierPortal() {
         await updateProduct(item._recordId, itemPayload)
       }
 
+      // Update form with translated ingredients if auto-correction happened
+      if (payload.ingredientsIt !== (values.ingredientsIt || '')) {
+        setEditData(prev => ({
+          ...prev,
+          [primaryRecord]: { ...(prev[primaryRecord] || {}), ingredientsIt: payload.ingredientsIt }
+        }))
+      }
       const savedState = {}
       const confirmedState = {}
       items.forEach(p => {
@@ -1139,6 +1158,8 @@ export default function SupplierPortal() {
             const category = product.category || ''
             const suggestion = getIngredientSuggestion(category, lang === 'jp' ? 'jp' : 'it', product.name)
             const currentIngredients = values.ingredientsIt || ''
+            const ingredientLang = currentIngredients ? detectIngredientLang(currentIngredients) : 'it'
+            const ingredientMismatch = currentIngredients && ingredientLang !== 'it'
 
             const bg = isCopySource ? '#fff8e1' : isSaved ? '#e8f5e9' : '#fff'
 
@@ -1262,6 +1283,11 @@ export default function SupplierPortal() {
                           {t.useSuggestion}: {suggestion.length > 40 ? suggestion.slice(0, 40) + '...' : suggestion}
                         </button>
                       )}
+                      {ingredientMismatch && (
+                        <span style={{ fontSize: '10px', color: '#e65100', fontWeight: 600 }}>
+                          ⚠ Lingua rilevata: {ingredientLang.toUpperCase()} — verrà tradotto in italiano al salvataggio
+                        </span>
+                      )}
                     </div>
                     <textarea
                       value={currentIngredients}
@@ -1270,8 +1296,8 @@ export default function SupplierPortal() {
                       rows={2}
                       style={{
                         width: '100%', padding: '8px 10px',
-                        border: '1px solid #ddd', borderRadius: '6px', fontSize: '14px',
-                        background: isCopySource ? '#fff8e1' : isSaved ? '#e8f5e9' : '#fff',
+                        border: ingredientMismatch ? '2px solid #e65100' : '1px solid #ddd', borderRadius: '6px', fontSize: '14px',
+                        background: ingredientMismatch ? '#fff3e0' : isCopySource ? '#fff8e1' : isSaved ? '#e8f5e9' : '#fff',
                         resize: 'vertical', boxSizing: 'border-box',
                         fontFamily: 'Inter, -apple-system, sans-serif',
                       }}

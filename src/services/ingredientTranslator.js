@@ -142,7 +142,7 @@ for (const lang of LANGS) {
  * Detect the language of an ingredient text.
  * Returns the most likely language code.
  */
-function detectLanguage(text) {
+export function detectLanguage(text) {
   if (!text) return 'it'
 
   // Check for Japanese characters (hiragana, katakana, kanji)
