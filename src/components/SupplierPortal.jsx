@@ -1576,7 +1576,7 @@ export default function SupplierPortal() {
                               maxLength={35}
                               value={ps.perText}
                               onChange={e => updateItemPrintSetting(item._recordId, 'perText', e.target.value)}
-                              style={{ ...inputBase, width: '170px', border: '1px solid #ce93d8', background: ps.perText ? '#f3e5f5' : '#fff' }}
+                              style={{ ...inputBase, width: '300px', border: '1px solid #ce93d8', background: ps.perText ? '#f3e5f5' : '#fff' }}
                             />
                           </div>
 
