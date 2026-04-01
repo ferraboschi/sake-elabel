@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react'
+import { Link } from 'react-router-dom'
 import { searchLabels, getLabelStats } from '../services/labelStore'
 import { downloadLabelPDF, downloadBoxLabelPDF } from '../services/labelPrinter'
 
@@ -113,14 +114,14 @@ const LabelArchive = () => {
           <h1 style={{ fontSize: '20px', margin: 0, color: '#333', flex: 1, fontFamily: 'Inter, -apple-system, sans-serif' }}>
             Archivio Etichette / ラベルアーカイブ
           </h1>
-          <a href="/" style={{
+          <Link to="/" style={{
             padding: '6px 14px', fontSize: '13px', fontWeight: 600,
             background: '#f5f5f5', color: '#555', border: '1px solid #ccc',
             borderRadius: '6px', textDecoration: 'none', display: 'inline-block',
             whiteSpace: 'nowrap',
           }}>
             🍶 Generatore
-          </a>
+          </Link>
         </div>
         <p style={{ color: '#666', fontSize: '14px', margin: 0 }}>
           {stats.total} etichette · {families.length} prodotti · {totalFormats} formati

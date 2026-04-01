@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useSearchParams, Link } from 'react-router-dom'
 import { fetchProducts, updateProduct, isAirtableConfigured } from '../services/airtable'
 import { translateIngredients as autoTranslateIngredients, autoFillIngredients, detectLanguage as detectIngredientLang } from '../services/ingredientTranslator'
 import { useGenerateLabel } from '../hooks/useGenerateLabel'
@@ -1003,14 +1003,14 @@ export default function SupplierPortal() {
           <h1 style={{ fontSize: '20px', margin: 0, color: '#333', flex: 1 }}>
             {t.title}
           </h1>
-          <a href="/archive" style={{
+          <Link to="/archive" style={{
             padding: '6px 14px', fontSize: '13px', fontWeight: 600,
             background: '#f5f5f5', color: '#555', border: '1px solid #ccc',
             borderRadius: '6px', textDecoration: 'none', display: 'inline-block',
             whiteSpace: 'nowrap',
           }}>
             {lang === 'jp' ? '📂 アーカイブ' : '📂 Archivio'}
-          </a>
+          </Link>
           <div style={{
             display: 'flex', borderRadius: '6px', overflow: 'hidden',
             border: '1px solid #ccc', fontSize: '13px',
@@ -1204,13 +1204,13 @@ export default function SupplierPortal() {
                         <span style={{ color: '#2e7d32', fontSize: '12px', fontWeight: 500, marginLeft: '8px' }}>✓ {t.data}</span>
                       )}
                       {hasArchiveLabels && (
-                        <a href="/archive" style={{
+                        <Link to="/archive" style={{
                           fontSize: '11px', fontWeight: 600, marginLeft: '8px',
                           color: '#7b1fa2', background: '#f3e5f9', padding: '1px 8px',
                           borderRadius: '10px', textDecoration: 'none', display: 'inline-block',
                         }}>
                           📂 {groupArchiveLabels.length} {lang === 'jp' ? 'ラベル生成済み' : groupArchiveLabels.length === 1 ? 'etichetta generata' : 'etichette generate'}
-                        </a>
+                        </Link>
                       )}
                     </div>
                     {((lang === 'jp' && product.name && product.nameJp) || (lang === 'it' && product.nameJp)) && (
