@@ -412,7 +412,9 @@ export default function SupplierPortal() {
   const [productFilter, setProductFilter] = useState('')
   const [passwordInput, setPasswordInput] = useState('')
   const [passwordError, setPasswordError] = useState(false)
-  const [loggedInViaPassword, setLoggedInViaPassword] = useState(false)
+  const [loggedInViaPassword, setLoggedInViaPassword] = useState(() => {
+    try { return localStorage.getItem('elabel_logged_in') === 'true' } catch { return false }
+  })
 
   const isAuthorized = VALID_TOKENS.includes(token) || loggedInViaPassword
 
@@ -421,6 +423,7 @@ export default function SupplierPortal() {
     const normalized = normalizeFullWidth(passwordInput).trim().toLowerCase()
     if (VALID_PASSWORDS.includes(normalized)) {
       setLoggedInViaPassword(true)
+      try { localStorage.setItem('elabel_logged_in', 'true') } catch { /* ignore */ }
       setPasswordError(false)
     } else {
       setPasswordError(true)
