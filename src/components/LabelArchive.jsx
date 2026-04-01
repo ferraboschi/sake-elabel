@@ -116,9 +116,15 @@ const LabelArchive = () => {
             {stats.total} etichette · {families.length} prodotti · {totalFormats} formati
           </p>
         </div>
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <button onClick={() => navigate('/')} style={s.btnGhost}>Home</button>
-          <button onClick={() => navigate('/admin')} style={s.btnSecondary}>Generatore</button>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <a href="/" style={{
+            padding: '6px 14px', fontSize: '13px', fontWeight: 600,
+            background: '#f5f5f5', color: '#555', border: '1px solid #ccc',
+            borderRadius: '6px', textDecoration: 'none', display: 'inline-block',
+            whiteSpace: 'nowrap',
+          }}>
+            🍶 Generatore
+          </a>
         </div>
       </div>
 
