@@ -7,6 +7,7 @@ import { downloadBoxLabelPDF } from '../services/labelPrinter'
 import { batchCheckReprint } from '../services/printSnapshot'
 import { LANG_OPTIONS } from '../config/constants'
 import { getAllImporters, addCustomImporter, updateCustomImporter, removeCustomImporter, updateDefaultImporter, REGION_CODE_LABELS, getImportersForRegion } from '../data/importers'
+import { getLabels } from '../services/labelStore'
 
 const VALID_TOKENS = ['sake2026supplier', 'fornitore2026', 'supplier2026']
 const VALID_PASSWORDS = ['sake2026', 'fornitore2026']
@@ -446,6 +447,20 @@ export default function SupplierPortal() {
       setLoading(false)
     }
   }
+
+  // Archive labels lookup: slug → array of generated labels
+  const archiveBySlug = useMemo(() => {
+    const map = {}
+    try {
+      const allLabels = getLabels()
+      allLabels.forEach(l => {
+        const slug = l.productSlug
+        if (!map[slug]) map[slug] = []
+        map[slug].push(l)
+      })
+    } catch { /* ignore */ }
+    return map
+  }, [products]) // re-check when products reload
 
   // Filter to beverages only, then group by name (sibling products = same name, different volumes)
   const beverageProducts = useMemo(() => products.filter(isBeverage), [products])
@@ -988,6 +1003,14 @@ export default function SupplierPortal() {
           <h1 style={{ fontSize: '20px', margin: 0, color: '#333', flex: 1 }}>
             {t.title}
           </h1>
+          <a href="/archive" style={{
+            padding: '6px 14px', fontSize: '13px', fontWeight: 600,
+            background: '#f5f5f5', color: '#555', border: '1px solid #ccc',
+            borderRadius: '6px', textDecoration: 'none', display: 'inline-block',
+            whiteSpace: 'nowrap',
+          }}>
+            {lang === 'jp' ? '📂 アーカイブ' : '📂 Archivio'}
+          </a>
           <div style={{
             display: 'flex', borderRadius: '6px', overflow: 'hidden',
             border: '1px solid #ccc', fontSize: '13px',
@@ -1160,6 +1183,9 @@ export default function SupplierPortal() {
             const currentIngredients = values.ingredientsIt || ''
             const ingredientLang = currentIngredients ? detectIngredientLang(currentIngredients) : 'it'
             const ingredientMismatch = currentIngredients && ingredientLang !== 'it'
+            // Archive status: check if any item in this group has generated labels
+            const groupArchiveLabels = group.items.flatMap(item => archiveBySlug[item.slug] || [])
+            const hasArchiveLabels = groupArchiveLabels.length > 0
 
             const bg = isCopySource ? '#fff8e1' : isSaved ? '#e8f5e9' : '#fff'
 
@@ -1176,6 +1202,15 @@ export default function SupplierPortal() {
                       {lang === 'jp' && product.nameJp ? product.nameJp : product.name}
                       {alreadyHasData && !isSaved && (
                         <span style={{ color: '#2e7d32', fontSize: '12px', fontWeight: 500, marginLeft: '8px' }}>✓ {t.data}</span>
+                      )}
+                      {hasArchiveLabels && (
+                        <a href="/archive" style={{
+                          fontSize: '11px', fontWeight: 600, marginLeft: '8px',
+                          color: '#7b1fa2', background: '#f3e5f9', padding: '1px 8px',
+                          borderRadius: '10px', textDecoration: 'none', display: 'inline-block',
+                        }}>
+                          📂 {groupArchiveLabels.length} {lang === 'jp' ? 'ラベル生成済み' : groupArchiveLabels.length === 1 ? 'etichetta generata' : 'etichette generate'}
+                        </a>
                       )}
                     </div>
                     {((lang === 'jp' && product.name && product.nameJp) || (lang === 'it' && product.nameJp)) && (

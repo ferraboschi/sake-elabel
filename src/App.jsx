@@ -49,11 +49,7 @@ function App() {
             <AdminPage />
           </ProtectedRoute>
         } />
-        <Route path="/archive" element={
-          <ProtectedRoute allowedRoles={['admin', 'partner']}>
-            <LabelArchive />
-          </ProtectedRoute>
-        } />
+        <Route path="/archive" element={<LabelArchive />} />
         <Route path="/importers" element={
           <ProtectedRoute allowedRoles={['admin', 'partner']}>
             <ImporterManager />

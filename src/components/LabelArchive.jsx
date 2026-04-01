@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useMemo } from 'react'
-import { useAuth } from '../contexts/AuthContext'
 import { useNavigate } from 'react-router-dom'
 import { searchLabels, getLabelStats } from '../services/labelStore'
 import { downloadLabelPDF, downloadBoxLabelPDF } from '../services/labelPrinter'
@@ -12,7 +11,6 @@ const LANG_FLAGS = {
 }
 
 const LabelArchive = () => {
-  const { isAuthenticated } = useAuth()
   const navigate = useNavigate()
   const [labels, setLabels] = useState([])
   const [stats, setStats] = useState({ total: 0, byLanguage: {}, byCountry: {} })
@@ -22,9 +20,8 @@ const LabelArchive = () => {
   const [busy, setBusy] = useState(null)
 
   useEffect(() => {
-    if (!isAuthenticated) { navigate('/login'); return }
     refreshLabels()
-  }, [isAuthenticated])
+  }, [])
 
   const refreshLabels = () => {
     const filters = {}
@@ -120,7 +117,7 @@ const LabelArchive = () => {
           </p>
         </div>
         <div style={{ display: 'flex', gap: '8px' }}>
-          <button onClick={() => navigate('/')} style={s.btnGhost}>Dashboard</button>
+          <button onClick={() => navigate('/')} style={s.btnGhost}>Home</button>
           <button onClick={() => navigate('/admin')} style={s.btnSecondary}>Generatore</button>
         </div>
       </div>
@@ -254,9 +251,9 @@ const LabelArchive = () => {
                             </button>
                           </div>
 
-                          {/* Printed badge */}
-                          <span style={s.printedBadge} title="Etichetta scaricata — non eliminabile">
-                            Stampata
+                          {/* Generated badge + date */}
+                          <span style={s.printedBadge} title={`Generata il ${fmtDate(label.generatedAt)}`}>
+                            Generata {fmtDate(label.generatedAt)}
                           </span>
                         </div>
                       ))}
