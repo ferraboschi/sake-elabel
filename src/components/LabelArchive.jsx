@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useMemo } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { searchLabels, getLabelStats } from '../services/labelStore'
 import { downloadLabelPDF, downloadBoxLabelPDF } from '../services/labelPrinter'
 
@@ -11,7 +10,6 @@ const LANG_FLAGS = {
 }
 
 const LabelArchive = () => {
-  const navigate = useNavigate()
   const [labels, setLabels] = useState([])
   const [stats, setStats] = useState({ total: 0, byLanguage: {}, byCountry: {} })
   const [query, setQuery] = useState('')
@@ -108,15 +106,13 @@ const LabelArchive = () => {
 
   return (
     <div style={s.container}>
-      {/* Header */}
-      <div style={s.header}>
-        <div>
-          <h1 style={s.title}>Archivio Etichette / ラベルアーカイブ</h1>
-          <p style={s.subtitle}>
-            {stats.total} etichette · {families.length} prodotti · {totalFormats} formati
-          </p>
-        </div>
-        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+      {/* Header — matches SupplierPortal nav style */}
+      <div style={{ marginBottom: '24px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px', flexWrap: 'wrap' }}>
+          <img src="/logo-sc.png" alt="Sake Company" style={{ height: '32px' }} />
+          <h1 style={{ fontSize: '20px', margin: 0, color: '#333', flex: 1, fontFamily: 'Inter, -apple-system, sans-serif' }}>
+            Archivio Etichette / ラベルアーカイブ
+          </h1>
           <a href="/" style={{
             padding: '6px 14px', fontSize: '13px', fontWeight: 600,
             background: '#f5f5f5', color: '#555', border: '1px solid #ccc',
@@ -126,6 +122,9 @@ const LabelArchive = () => {
             🍶 Generatore
           </a>
         </div>
+        <p style={{ color: '#666', fontSize: '14px', margin: 0 }}>
+          {stats.total} etichette · {families.length} prodotti · {totalFormats} formati
+        </p>
       </div>
 
       {/* Filters row */}
