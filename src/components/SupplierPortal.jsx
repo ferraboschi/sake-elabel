@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { useSearchParams, Link } from 'react-router-dom'
 import { fetchProducts, updateProduct, isAirtableConfigured } from '../services/airtable'
 import { translateIngredients as autoTranslateIngredients, autoFillIngredients, detectLanguage as detectIngredientLang } from '../services/ingredientTranslator'
@@ -143,21 +143,9 @@ const INGREDIENT_TRANSLATIONS = [
   { it: 'yuzu', jp: 'ゆず' },
   { it: 'miele', jp: 'はちみつ' },
 ]
+const DEFAULT_PRINT_SETTINGS = { lang: 'it', regionCode: 'ITA', importerId: 'default-it', perText: '' }
 
-function translateIngredients(text, fromLang) {
-  if (!text || !text.trim()) return ''
-  const sep = fromLang === 'jp' ? '、' : ','
-  const parts = text.split(sep).map(s => s.trim()).filter(Boolean)
-  const translated = parts.map(part => {
-    const lower = part.toLowerCase()
-    for (const entry of INGREDIENT_TRANSLATIONS) {
-      if (fromLang === 'it' && lower === entry.it.toLowerCase()) return entry.jp
-      if (fromLang === 'jp' && part === entry.jp) return entry.it.charAt(0).toUpperCase() + entry.it.slice(1)
-    }
-    return part // keep untranslated
-  })
-  return fromLang === 'jp' ? translated.join(', ') : translated.join('、')
-}
+
 
 function isJunmai(category) {
   if (!category) return null // unknown
@@ -608,18 +596,18 @@ export default function SupplierPortal() {
 
   // Per-group print settings helpers (keyed by group key, shared across all sizes)
   const getGroupPrintSettings = (groupKey) => {
-    return itemPrintSettings[groupKey] || { lang: 'it', regionCode: 'ITA', importerId: 'default-it', perText: '' }
+    return itemPrintSettings[groupKey] || DEFAULT_PRINT_SETTINGS
   }
   const updateGroupPrintSetting = (groupKey, key, value) => {
     setItemPrintSettings(prev => {
-      const current = prev[groupKey] || { lang: 'it', regionCode: 'ITA', importerId: 'default-it', perText: '' }
+      const current = prev[groupKey] || DEFAULT_PRINT_SETTINGS
       return { ...prev, [groupKey]: { ...current, [key]: value } }
     })
   }
   // Batch update multiple settings at once (avoids stale closure issues)
   const updateGroupPrintSettings = (groupKey, updates) => {
     setItemPrintSettings(prev => {
-      const current = prev[groupKey] || { lang: 'it', regionCode: 'ITA', importerId: 'default-it', perText: '' }
+      const current = prev[groupKey] || DEFAULT_PRINT_SETTINGS
       return { ...prev, [groupKey]: { ...current, ...updates } }
     })
   }
@@ -715,7 +703,6 @@ export default function SupplierPortal() {
         if (detectedLang !== 'it') {
           const { text: italianText } = autoTranslateIngredients(rawIngredients, 'it', detectedLang)
           if (italianText) {
-            console.log(`[Supplier] Ingredients detected as '${detectedLang}', auto-translated to Italian`)
             payload.ingredientsIt = italianText
             rawIngredients = italianText
           }
@@ -726,7 +713,6 @@ export default function SupplierPortal() {
           const { text } = autoTranslateIngredients(rawIngredients, lang)
           if (text) payload[`ingredients${suffix}`] = text
         }
-        console.log(`[Supplier] Auto-translated ingredients to ${Object.keys(langMap).length} languages`)
       }
       // Save alcohol directly as percentage (no conversion)
       if (!isNaN(alcoholVal) && alcoholVal >= 0) {

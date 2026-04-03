@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { searchLabels, getLabelStats } from '../services/labelStore'
 import { downloadLabelPDF, downloadBoxLabelPDF } from '../services/labelPrinter'
 
@@ -11,6 +11,7 @@ const LANG_FLAGS = {
 }
 
 const LabelArchive = () => {
+  const navigate = useNavigate()
   const [labels, setLabels] = useState([])
   const [stats, setStats] = useState({ total: 0, byLanguage: {}, byCountry: {} })
   const [query, setQuery] = useState('')
@@ -298,7 +299,6 @@ const s = {
     textAlign: 'center', padding: '60px 20px', background: '#fafafa',
     borderRadius: '12px', border: '1px solid #eee',
   },
-  tableHead: { /* kept for reference, unused with family layout */ },
   dlBtn: {
     padding: '3px 7px', fontSize: '10px', fontWeight: 700, cursor: 'pointer',
     border: '1px solid #ddd', borderRadius: '4px', background: '#fff', color: '#333',
@@ -317,14 +317,6 @@ const s = {
   btnPrimary: {
     background: '#635bff', color: '#fff', border: 'none', borderRadius: '8px',
     padding: '10px 20px', fontSize: '14px', fontWeight: 600, cursor: 'pointer',
-  },
-  btnSecondary: {
-    background: '#fff', color: '#333', border: '1px solid #ddd', borderRadius: '8px',
-    padding: '8px 16px', fontSize: '13px', cursor: 'pointer', fontWeight: 500,
-  },
-  btnGhost: {
-    background: 'none', color: '#888', border: '1px solid #eee', borderRadius: '8px',
-    padding: '8px 16px', fontSize: '13px', cursor: 'pointer',
   },
   familyHeader: {
     display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap',

@@ -82,14 +82,6 @@ const getLabelKeys = (label) => {
   return keys
 }
 
-/** Single primary key for saveLabels dedup (backward compat) */
-const getLabelKey = (label) => {
-  const id = label.productCode || label.productSlug || label.slug || ''
-  const lang = label.language || ''
-  const country = label.country || ''
-  return `${id}__${lang}__${country}`
-}
-
 /**
  * Save a batch of generated labels.
  * Replaces any existing label with same product+language+country (deduplication).
