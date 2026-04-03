@@ -8,7 +8,7 @@ import App from './App'
 import './App.css'
 
 // App version — logged on startup to verify CDN serves latest code
-window.__ELABEL_VERSION = '2026.04.01.1'
+window.__ELABEL_VERSION = '2026.04.03.1'
 
 // Force dedup cleanup on every app load (getLabels auto-deduplicates)
 try { getLabels() } catch { /* ignore */ }

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { useSearchParams, Link } from 'react-router-dom'
 import { fetchProducts, updateProduct, isAirtableConfigured } from '../services/airtable'
 import { translateIngredients as autoTranslateIngredients, autoFillIngredients, detectLanguage as detectIngredientLang } from '../services/ingredientTranslator'
@@ -209,7 +209,7 @@ const T = {
     clickPaste: '— Clicca Incolla sui prodotti destinazione',
     exitCopy: 'Esci da copia',
     howItWorks: 'Come funziona:',
-    howItWorksText: 'I prodotti con più pezzature sono raggruppati: compila una volta sola e il salvataggio si applica a tutte le dimensioni. Clicca "Salva ✓" per confermare e nascondere. Per copiare valori su altri prodotti, usa Copia → Incolla.',
+    howItWorksText: 'I prodotti con più pezzature sono raggruppati: compila una volta sola e il salvataggio automatico si applica a tutte le dimensioni. Per copiare valori su altri prodotti, usa Copia → Incolla.',
     nutritionTitle: 'Valori nutrizionali per 100ml',
     ingredientsLabel: 'Ingredienti',
     ingredientsPlaceholder: 'Es: Riso, koji, acqua...',
@@ -219,15 +219,15 @@ const T = {
     copy: 'Copia',
     copying: 'Copiando...',
     paste: 'Incolla',
-    save: 'Salva ✓',
-    saving: 'Salvataggio...',
-    saved: 'Salvato ✓',
-    saveAll: 'Salva tutti',
     savedCount: 'salvati',
-    confirmedCount: 'confermati',
     totalCount: 'totali',
-    allConfirmed: 'Tutti i prodotti visibili sono stati confermati!',
-    confirmedProducts: 'prodotti confermati',
+    allConfirmed: 'Tutti i prodotti sono stati stampati!',
+    printed: 'stampati',
+    printedProducts: 'prodotti stampati',
+    allPrinted: 'Tutti i prodotti sono stati stampati!',
+    notPrinted: 'Non stampati',
+    stampato: 'Stampato',
+    daPrintare: 'Da stampare',
     showAll: 'Mostra tutti i prodotti',
     noProducts: 'Nessun prodotto trovato. Prova a cambiare i filtri.',
     unauthorized: 'Accesso non autorizzato',
@@ -270,7 +270,7 @@ const T = {
     clickPaste: '— 貼り付け先で「貼付」をクリック',
     exitCopy: 'コピー終了',
     howItWorks: '使い方:',
-    howItWorksText: '同じ製品の異なるサイズはグループ化されます。一度入力すれば全サイズに保存されます。「保存 ✓」で確認・非表示。「コピー」→「貼付」で他の製品に値をコピーできます。',
+    howItWorksText: '同じ製品の異なるサイズはグループ化されます。一度入力すれば全サイズに自動保存されます。「コピー」→「貼付」で他の製品に値をコピーできます。',
     nutritionTitle: '100mlあたりの栄養成分',
     ingredientsLabel: '原材料名',
     ingredientsPlaceholder: '例: 米、米麹、水...',
@@ -280,15 +280,15 @@ const T = {
     copy: 'コピー',
     copying: 'コピー中...',
     paste: '貼付',
-    save: '保存 ✓',
-    saving: '保存中...',
-    saved: '保存済み ✓',
-    saveAll: '全て保存',
     savedCount: '保存済み',
-    confirmedCount: '確認済み',
     totalCount: '合計',
-    allConfirmed: '表示中の全製品が確認済みです！',
-    confirmedProducts: '製品確認済み',
+    allConfirmed: '全製品印刷済み！',
+    printed: '印刷済み',
+    printedProducts: '印刷済み製品',
+    allPrinted: '全製品印刷済み！',
+    notPrinted: '未印刷',
+    stampato: '印刷済み',
+    daPrintare: '未印刷',
     showAll: '全製品を表示',
     noProducts: '製品が見つかりません。フィルターを変更してください。',
     unauthorized: 'アクセス権限がありません',
@@ -382,7 +382,6 @@ export default function SupplierPortal() {
   const [editData, setEditData] = useState({})
   const [saving, setSaving] = useState({})
   const [saved, setSaved] = useState({})
-  const [confirmed, setConfirmed] = useState({})
   const [statusFilter, setStatusFilter] = useState('all') // 'all' | 'todo' | 'done'
   const [reprintStatus, setReprintStatus] = useState({}) // code → { needsReprint, printedAt }
   const [copySource, setCopySource] = useState(null) // groupKey
@@ -393,6 +392,10 @@ export default function SupplierPortal() {
   // Per-item print settings: recordId → { lang, regionCode, importerId, perText }
   const [itemPrintSettings, setItemPrintSettings] = useState({})
   const [importerModal, setImporterModal] = useState(null) // null or { recordId, editing: null|importer }
+
+  // Autosave: debounce timers keyed by group key
+  const autosaveTimers = useRef({})
+  const latestGroupsRef = useRef([]) // keep latest filteredGroups for autosave callback
   const [modalForm, setModalForm] = useState({ name: '', address: '', website: '', lang: 'it', regionCode: 'ITA' })
   const [allImporters, setAllImporters] = useState([])
   const { generate, generating: generatingLabel, generateQR } = useGenerateLabel()
@@ -508,14 +511,19 @@ export default function SupplierPortal() {
         )
         if (!match) continue
       }
-      // Status filter
-      const groupDone = items.some(p => hasData(p)) || items.every(p => confirmed[p._recordId])
-      if (statusFilter === 'done' && !groupDone) continue
-      if (statusFilter === 'todo' && groupDone) continue
-      result.push({ key, items, _done: groupDone })
+      // Status filter — skip when searching (search shows all results)
+      const groupPrinted = items.some(item => (archiveBySlug[item.slug] || []).length > 0)
+      if (!productFilter) {
+        if (statusFilter === 'done' && !groupPrinted) continue
+        if (statusFilter === 'todo' && groupPrinted) continue
+      }
+      result.push({ key, items, _printed: groupPrinted })
     }
     return result
-  }, [productGroups, producerFilter, productFilter, statusFilter, confirmed])
+  }, [productGroups, producerFilter, productFilter, statusFilter, archiveBySlug])
+
+  // Keep ref in sync for autosave callbacks
+  useEffect(() => { latestGroupsRef.current = filteredGroups }, [filteredGroups])
 
   // Use the first (largest) product as the "representative" for edit data
   const getGroupEditValues = (group) => {
@@ -557,19 +565,22 @@ export default function SupplierPortal() {
     return product.bottlesPerBox || ''
   }
 
-  const updateEan = (recordId, value) => {
+  const updateEan = (recordId, value, groupKey) => {
     const clean = normalizeJapaneseInput(value, true)
     setEanEditData(prev => ({ ...prev, [recordId]: clean }))
+    if (groupKey) scheduleAutosave(groupKey)
   }
 
-  const updateEanBox = (recordId, value) => {
+  const updateEanBox = (recordId, value, groupKey) => {
     const clean = normalizeJapaneseInput(value, true)
     setEanBoxEditData(prev => ({ ...prev, [recordId]: clean }))
+    if (groupKey) scheduleAutosave(groupKey)
   }
 
-  const updateBottlesPerBox = (recordId, value) => {
+  const updateBottlesPerBox = (recordId, value, groupKey) => {
     const clean = normalizeJapaneseInput(value, true)
     setBottlesPerBoxEditData(prev => ({ ...prev, [recordId]: clean }))
+    if (groupKey) scheduleAutosave(groupKey)
   }
 
   const updateField = (groupKey, field, rawValue) => {
@@ -588,10 +599,11 @@ export default function SupplierPortal() {
         [field]: value,
       }
     }))
-    // Mark all items in group as unsaved
+    // Mark all items in group as unsaved and schedule autosave
     const newSaved = {}
     items.forEach(p => { newSaved[p._recordId] = false })
     setSaved(prev => ({ ...prev, ...newSaved }))
+    scheduleAutosave(groupKey)
   }
 
   // Per-group print settings helpers (keyed by group key, shared across all sizes)
@@ -671,7 +683,7 @@ export default function SupplierPortal() {
     setAllImporters(getAllImporters())
   }
 
-  const saveGroup = async (group, autoConfirm = false) => {
+  const saveGroup = async (group) => {
     const items = group.items
     const primaryRecord = items[0]._recordId
     const values = { ...getGroupEditValues(group), ...editData[primaryRecord] }
@@ -747,14 +759,9 @@ export default function SupplierPortal() {
         }))
       }
       const savedState = {}
-      const confirmedState = {}
-      items.forEach(p => {
-        savedState[p._recordId] = true
-        if (autoConfirm) confirmedState[p._recordId] = true
-      })
+      items.forEach(p => { savedState[p._recordId] = true })
       setSaved(prev => ({ ...prev, ...savedState }))
       setSavedAt(prev => ({ ...prev, [group.key]: new Date() }))
-      if (autoConfirm) setConfirmed(prev => ({ ...prev, ...confirmedState }))
       // Mark items as needing reprint if they had been printed before
       setReprintStatus(prev => {
         const updated = { ...prev }
@@ -775,8 +782,16 @@ export default function SupplierPortal() {
     }
   }
 
-  const saveAndConfirm = (group) => saveGroup(group, true)
-  const saveAll = async () => { for (const g of filteredGroups) await saveGroup(g) }
+  // Autosave: schedule a debounced save for a group (2 seconds after last edit)
+  const scheduleAutosave = useCallback((groupKey) => {
+    if (autosaveTimers.current[groupKey]) clearTimeout(autosaveTimers.current[groupKey])
+    autosaveTimers.current[groupKey] = setTimeout(() => {
+      delete autosaveTimers.current[groupKey]
+      // Find the group from the latest filteredGroups or productGroups
+      const group = latestGroupsRef.current.find(g => g.key === groupKey)
+      if (group) saveGroup(group)
+    }, 2000)
+  }, [])
 
   const handlePrintLabel = async (item, groupKey) => {
     setPrintingGroup(item._recordId)
@@ -883,6 +898,7 @@ export default function SupplierPortal() {
     const newSaved = {}
     targetItems.forEach(p => { newSaved[p._recordId] = false })
     setSaved(prev => ({ ...prev, ...newSaved }))
+    scheduleAutosave(targetGroupKey)
   }
 
   const applySuggestion = (groupKey, category, productName) => {
@@ -972,16 +988,15 @@ export default function SupplierPortal() {
 
   const groupHasData = (group) => group.items.some(p => hasData(p))
   const savedCount = Object.values(saved).filter(Boolean).length
-  const confirmedCount = Object.values(confirmed).filter(Boolean).length
   const copySourceGroup = copySource ? [...productGroups.entries()].find(([k]) => k === copySource) : null
 
-  // Progress: count groups that already have data OR have been confirmed in this session
+  // Progress: count groups that have at least one generated label in archive
   const totalGroups = [...productGroups.values()].length
-  const completedGroups = [...productGroups.entries()].filter(([key, items]) =>
-    items.some(p => hasData(p)) || items.every(p => confirmed[p._recordId])
+  const printedGroups = [...productGroups.entries()].filter(([key, items]) =>
+    items.some(item => (archiveBySlug[item.slug] || []).length > 0)
   ).length
-  const remainingGroups = totalGroups - completedGroups
-  const progressPct = totalGroups > 0 ? Math.round((completedGroups / totalGroups) * 100) : 0
+  const unprintedGroups = totalGroups - printedGroups
+  const progressPct = totalGroups > 0 ? Math.round((printedGroups / totalGroups) * 100) : 0
 
   return (
     <div style={{ maxWidth: '1100px', margin: '0 auto', padding: '24px 16px', fontFamily: 'Inter, -apple-system, sans-serif' }}>
@@ -1064,12 +1079,12 @@ export default function SupplierPortal() {
         </div>
       </div>
 
-      {/* Status filter: Tutti / Da fare / Completati */}
+      {/* Status filter: Tutti / Non stampati / Stampati */}
       <div style={{ display: 'flex', gap: '0', marginBottom: '16px' }}>
         {[
           { key: 'all', label: lang === 'jp' ? 'すべて' : 'Tutti', count: totalGroups },
-          { key: 'todo', label: lang === 'jp' ? '残り' : 'Da fare', count: remainingGroups },
-          { key: 'done', label: lang === 'jp' ? '完了' : 'Completati', count: completedGroups },
+          { key: 'todo', label: lang === 'jp' ? '未印刷' : 'Non stampati', count: unprintedGroups },
+          { key: 'done', label: lang === 'jp' ? '印刷済み' : 'Stampati', count: printedGroups },
         ].map((opt, i) => (
           <button key={opt.key} onClick={() => setStatusFilter(opt.key)}
             style={{
@@ -1120,12 +1135,12 @@ export default function SupplierPortal() {
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
           <span style={{ fontSize: '14px', fontWeight: 600, color: '#333' }}>
-            {t.progress}: {completedGroups} {t.of} {totalGroups} ({progressPct}%)
+            {t.progress}: {printedGroups} {t.of} {totalGroups} ({progressPct}%)
           </span>
           <span style={{ fontSize: '13px', color: '#888' }}>
-            <span style={{ color: '#2e7d32', fontWeight: 600 }}>{completedGroups} {t.completed}</span>
+            <span style={{ color: '#2e7d32', fontWeight: 600 }}>{printedGroups} {lang === 'jp' ? '印刷済み' : 'stampati'}</span>
             {' · '}
-            <span style={{ color: '#e65100', fontWeight: 600 }}>{remainingGroups} {t.remaining}</span>
+            <span style={{ color: '#e65100', fontWeight: 600 }}>{unprintedGroups} {lang === 'jp' ? '未印刷' : 'non stampati'}</span>
           </span>
         </div>
         <div style={{
@@ -1143,10 +1158,10 @@ export default function SupplierPortal() {
       {/* Product cards */}
       {filteredGroups.length === 0 ? (
         <div style={{ textAlign: 'center', color: '#888', padding: '40px' }}>
-          {statusFilter === 'todo' && completedGroups > 0 ? (
+          {statusFilter === 'todo' && printedGroups > 0 ? (
             <div>
-              <p style={{ fontSize: '18px', marginBottom: '8px' }}>🎉 {t.allConfirmed}</p>
-              <p style={{ fontSize: '14px' }}>{completedGroups} {t.confirmedProducts}</p>
+              <p style={{ fontSize: '18px', marginBottom: '8px' }}>🎉 {lang === 'jp' ? '全製品印刷済み！' : 'Tutti i prodotti sono stati stampati!'}</p>
+              <p style={{ fontSize: '14px' }}>{printedGroups} {lang === 'jp' ? '印刷済み製品' : 'prodotti stampati'}</p>
               <button onClick={() => setStatusFilter('all')}
                 style={{ marginTop: '12px', padding: '8px 20px', fontSize: '14px', background: '#f5f5f5', border: '1px solid #ccc', borderRadius: '6px', cursor: 'pointer', color: '#555' }}>
                 {t.showAll}
@@ -1201,6 +1216,18 @@ export default function SupplierPortal() {
                           📂 {groupArchiveLabels.length} {lang === 'jp' ? 'ラベル生成済み' : groupArchiveLabels.length === 1 ? 'etichetta generata' : 'etichette generate'}
                         </Link>
                       )}
+                      {productFilter && (
+                        <span style={{
+                          fontSize: '11px', fontWeight: 600, marginLeft: '8px',
+                          color: group._printed ? '#fff' : '#fff',
+                          background: group._printed ? '#2e7d32' : '#ff9800',
+                          padding: '2px 8px',
+                          borderRadius: '10px',
+                          display: 'inline-block',
+                        }}>
+                          {group._printed ? (lang === 'jp' ? '✓ 印刷済み' : '✓ Stampato') : (lang === 'jp' ? '未印刷' : 'Da stampare')}
+                        </span>
+                      )}
                     </div>
                     {((lang === 'jp' && product.name && product.nameJp) || (lang === 'it' && product.nameJp)) && (
                       <div style={{ fontSize: '13px', color: '#666', marginBottom: '2px' }}>
@@ -1251,25 +1278,14 @@ export default function SupplierPortal() {
                         {isCopySource ? t.copying : t.copy}
                       </button>
                     )}
-                    <button
-                      onClick={() => saveAndConfirm(group)} disabled={isSaving}
-                      style={{
-                        padding: '6px 16px', fontSize: '13px', fontWeight: 600,
-                        background: isSaved ? '#2e7d32' : isSaving ? '#ccc' : '#1565c0',
-                        color: '#fff', border: 'none', borderRadius: '6px',
-                        cursor: isSaving ? 'default' : 'pointer',
-                        minWidth: '100px',
-                      }}>
-                      {isSaving ? t.saving : isSaved ? t.saved : t.save}
-                    </button>
                   </div>
 
-                  {/* Last save date */}
-                  {savedAt[group.key] && (
-                    <span style={{ fontSize: '11px', color: '#888' }}>
-                      {t.lastSaved}: {savedAt[group.key].toLocaleTimeString(lang === 'jp' ? 'ja-JP' : 'it-IT', { hour: '2-digit', minute: '2-digit' })}
-                    </span>
-                  )}
+                  {/* Autosave status */}
+                  <span style={{ fontSize: '11px', color: isSaving ? '#1565c0' : isSaved ? '#2e7d32' : '#888', fontWeight: isSaving ? 600 : 400 }}>
+                    {isSaving ? (lang === 'jp' ? '保存中...' : 'Salvataggio...') : isSaved && savedAt[group.key] ? (
+                      `✓ ${lang === 'jp' ? '保存済み' : 'Salvato'} ${savedAt[group.key].toLocaleTimeString(lang === 'jp' ? 'ja-JP' : 'it-IT', { hour: '2-digit', minute: '2-digit' })}`
+                    ) : ''}
+                  </span>
                 </div>
 
                 {/* ====== SEZIONE 1: Dati etichetta fisica (obbligatori) ====== */}
@@ -1494,7 +1510,7 @@ export default function SupplierPortal() {
                         <span style={labelStyle}>{lang === 'jp' ? '本数' : 'N° Bott.'}</span>
                         <input type="text" inputMode="numeric" placeholder="6"
                           value={getBottlesPerBoxValue(item)}
-                          onChange={e => updateBottlesPerBox(item._recordId, e.target.value)}
+                          onChange={e => updateBottlesPerBox(item._recordId, e.target.value, group.key)}
                           style={{
                             ...inputBase, width: '50px', textAlign: 'center',
                             border: '1px solid #c5cae9', background: '#fff',
@@ -1513,7 +1529,7 @@ export default function SupplierPortal() {
                         <input type="text" inputMode="numeric"
                           placeholder="EAN 13 cifre"
                           value={getEanValue(item)}
-                          onChange={e => updateEan(item._recordId, e.target.value)}
+                          onChange={e => updateEan(item._recordId, e.target.value, group.key)}
                           style={{
                             ...inputBase, width: '150px',
                             border: '1px solid #c5cae9',
@@ -1535,7 +1551,7 @@ export default function SupplierPortal() {
                         <input type="text" inputMode="numeric"
                           placeholder="EAN 13 o ITF-14"
                           value={getEanBoxValue(item)}
-                          onChange={e => updateEanBox(item._recordId, e.target.value)}
+                          onChange={e => updateEanBox(item._recordId, e.target.value, group.key)}
                           style={{
                             ...inputBase, width: '155px',
                             border: '1px solid #ffcc80',
@@ -1695,16 +1711,12 @@ export default function SupplierPortal() {
         </div>
       )}
 
-      {/* Footer actions */}
+      {/* Footer stats */}
       {filteredGroups.length > 0 && (
-        <div style={{ marginTop: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+        <div style={{ marginTop: '24px', textAlign: 'center' }}>
           <span style={{ fontSize: '13px', color: '#888' }}>
-            {completedGroups} {t.completed} / {totalGroups} {t.totalCount}
+            {printedGroups} {t.completed} / {totalGroups} {t.totalCount}
           </span>
-          <button onClick={saveAll}
-            style={{ padding: '10px 24px', fontSize: '14px', fontWeight: 600, background: '#1565c0', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>
-            {t.saveAll}
-          </button>
         </div>
       )}
 
