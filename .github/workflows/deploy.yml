@@ -30,7 +30,6 @@ jobs:
       - name: Build
         run: npm run build
         env:
-          VITE_AIRTABLE_API_KEY: ${{ secrets.VITE_AIRTABLE_API_KEY }}
           VITE_AIRTABLE_PROXY_URL: ${{ secrets.VITE_AIRTABLE_PROXY_URL }}
           VITE_AIRTABLE_BASE_ID: ${{ secrets.VITE_AIRTABLE_BASE_ID }}
           VITE_SHOPIFY_STORE: ${{ secrets.VITE_SHOPIFY_STORE }}
