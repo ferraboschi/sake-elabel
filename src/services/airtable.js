@@ -12,6 +12,8 @@
 
 const AIRTABLE_BASE_ID = import.meta.env.VITE_AIRTABLE_BASE_ID || 'appwCWGRd0jXOCxMA'
 const AIRTABLE_API_KEY = import.meta.env.VITE_AIRTABLE_API_KEY || ''
+const AIRTABLE_PROXY_URL = import.meta.env.VITE_AIRTABLE_PROXY_URL || ''
+const USE_PROXY = !!AIRTABLE_PROXY_URL
 const PRODUCT_TABLE_ID = 'tblilRsJLHIVJ1xju'
 
 /**
@@ -81,12 +83,22 @@ const FIELDS = {
   elabelLastUpdated:  { id: 'fld5NGZ7Y4TbmxsrQ', name: 'ELabel_Last_Updated' },
 }
 
-const API_BASE = 'https://api.airtable.com/v0'
+// When VITE_AIRTABLE_PROXY_URL is set (production), go through the Cloudflare Worker
+// which adds the Authorization header server-side. Otherwise (local dev), call
+// Airtable directly using the client-side API key.
+const API_BASE = USE_PROXY
+  ? `${AIRTABLE_PROXY_URL.replace(/\/$/, '')}/api/airtable/v0`
+  : 'https://api.airtable.com/v0'
 
-const headers = () => ({
-  'Authorization': `Bearer ${AIRTABLE_API_KEY}`,
-  'Content-Type': 'application/json'
-})
+const headers = () => {
+  const h = { 'Content-Type': 'application/json' }
+  // Only send Authorization when calling Airtable directly (dev).
+  // The Worker injects its own token server-side.
+  if (!USE_PROXY) {
+    h['Authorization'] = `Bearer ${AIRTABLE_API_KEY}`
+  }
+  return h
+}
 
 /**
  * Fetch with automatic retry on Airtable rate-limit (429).
@@ -109,6 +121,9 @@ async function fetchWithRetry(url, options, retries = 3) {
  * Check if Airtable API is configured
  */
 export const isAirtableConfigured = () => {
+  // In production we use the proxy (no API key on client).
+  // In dev we use the direct API key.
+  if (USE_PROXY) return true
   return !!AIRTABLE_API_KEY && AIRTABLE_API_KEY.length > 10
 }
 
