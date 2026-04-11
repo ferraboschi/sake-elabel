@@ -202,4 +202,18 @@ export const regenerateLabel = (id, newData) => {
   return updated
 }
 
-export default { getLabels, saveLabels, searchLabels, deleteLabel, getLabelStats, regenerateLabel }
+/**
+ * Mark a label as downloaded — records timestamp of last download.
+ * Used to show the user when they last got a PDF from the archive.
+ */
+export const markLabelDownloaded = (id) => {
+  const labels = getLabels()
+  const updated = labels.map(l => {
+    if (l.id !== id) return l
+    return { ...l, lastDownloadedAt: new Date().toISOString() }
+  })
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(updated))
+  return updated
+}
+
+export default { getLabels, saveLabels, searchLabels, deleteLabel, getLabelStats, regenerateLabel, markLabelDownloaded }

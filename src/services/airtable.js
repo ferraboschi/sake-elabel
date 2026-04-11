@@ -414,22 +414,24 @@ function normalizeRecord(record) {
       salt: get('saltG'),
     },
 
-    // Ingredients (multi-language)
+    // Ingredients (multi-language, ja populated by autoFillIngredients)
     ingredients: {
       it: get('ingredientsIt') || '',
       en: get('ingredientsEn') || '',
       fr: get('ingredientsFr') || '',
       de: get('ingredientsDe') || '',
       es: get('ingredientsEs') || '',
+      ja: '',
     },
 
-    // Allergens (multi-language)
+    // Allergens (multi-language, ja populated by autoFillIngredients)
     allergens: {
       it: get('allergensIt') || '',
       en: get('allergensEn') || '',
       fr: get('allergensFr') || '',
       de: get('allergensDe') || '',
       es: get('allergensEs') || '',
+      ja: '',
     },
 
     // Sake-specific

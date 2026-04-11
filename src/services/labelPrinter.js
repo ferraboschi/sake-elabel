@@ -117,15 +117,32 @@ function registerJpFont(doc, fontBase64) {
 // DESIGN CONSTANTS — extracted from reference PDF
 // ═══════════════════════════════════════════════════════
 
-// Font sizes (pt)
+// ═══════════════════════════════════════════════════════
+// EU Reg. 1169/2011 — minimum x-height = 0.9mm for packages
+// with surface < 80 cm² (our label: 55mm × ~80mm ≈ 44 cm²).
+// Helvetica x-height ≈ 0.523 × em size.
+// → min em = 0.9 / 0.523 ≈ 1.72mm ≈ 4.88pt
+// → SAFE FLOOR: 5pt (gives x-height 0.92mm, just above minimum)
+// All font sizes below MUST be >= EU_MIN_PT.
+// ═══════════════════════════════════════════════════════
+const EU_MIN_PT = 5
+
+// Font sizes (pt) — all values verified ≥ EU_MIN_PT
 const FS = {
   title: 8,       // Product name — bold, auto-reduced for long names
   category: 6,    // Category line — italic
   ingHeader: 6.5, // "Ingredienti:" — bold
-  body: 6,        // Body text — regular
-  warnHeader: 5.5,// "Avvertenze:" — bold
-  warn: 5.5,      // Warning text — regular (EU min compliant)
-  cod: 5.5,       // Footer "Cod." line
+  body: 6,        // Body text — regular (x-height ~1.11mm, EU compliant)
+  warnHeader: 5.5,// "Avvertenze:" — bold (x-height ~1.02mm, EU compliant)
+  warn: 5.5,      // Warning text — regular (x-height ~1.02mm, EU compliant)
+  cod: 5.5,       // Footer "Cod." line (x-height ~1.02mm, EU compliant)
+}
+
+// Compile-time safety check: prevent any font from going below EU minimum
+for (const [k, v] of Object.entries(FS)) {
+  if (v < EU_MIN_PT) {
+    throw new Error(`[LabelPrinter] FS.${k} = ${v}pt is below EU minimum (${EU_MIN_PT}pt). Reg. 1169/2011 requires x-height ≥ 0.9mm.`)
+  }
 }
 
 // Baseline offsets (distance from text top-edge to jsPDF baseline)
@@ -164,7 +181,7 @@ const LABEL_W = 55          // label width
 const MARGIN = 2.5          // content margin
 const PITTO_SIZE = 6.1      // pittogramma icon
 const QR_SIZE = 13           // QR code (EU minimum)
-const BARCODE_COL_W = 12    // barcode column width
+const BARCODE_COL_W = 14    // barcode column width — wider for max barcode size
 const BLEED = 5             // bleed area for crop marks
 
 // Separator line
@@ -298,8 +315,13 @@ export const generateLabelPDF = async (rawLabel, options = {}) => {
   const t = TRANSLATIONS[lang] || TRANSLATIONS.it
   const descText = label.legalDescription || t.desc
   const warnings = [t.pregnancy, t.minor, t.storage]
-  const ingText = label.ingredients?.[lang] || ''
-  const algText = label.allergens?.[lang] || ''
+  // Ingredients/allergens: fallback chain — selected lang → English → Italian → any available
+  const pickText = (obj) => {
+    if (!obj) return ''
+    return obj[lang] || obj.en || obj.it || Object.values(obj).find(v => v && typeof v === 'string' && v.trim()) || ''
+  }
+  const ingText = pickText(label.ingredients)
+  const algText = pickText(label.allergens)
   const hasCJK = (text) => /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]/.test(text)
 
   // ─── PASS 1: MEASURE HEIGHT ──────────────────────────
@@ -382,13 +404,19 @@ export const generateLabelPDF = async (rawLabel, options = {}) => {
       cy += LS.body - TH.body
       cy += TH.body
     }
+    // Address merged with website (sakecompany.com joins last line)
     if (label.importer?.address) {
-      const aLines = tmp.splitTextToSize(label.importer.address, TW)
+      const addrWithSite = `${label.importer.address}, ${t.website}`
+      const aLines = tmp.splitTextToSize(addrWithSite, TW)
       cy += LS.body - TH.body
       cy += TH.body
       if (aLines.length > 1) cy += (aLines.length - 1) * LS.body
+    } else {
+      // No address → website alone
+      cy += LS.body - TH.body
+      cy += TH.body
     }
-    // Website
+    // "Per:" line — ALWAYS reserved (empty if no perText) so label height is stable
     cy += LS.body - TH.body
     cy += TH.body
   }
@@ -407,7 +435,7 @@ export const generateLabelPDF = async (rawLabel, options = {}) => {
   tmp.setFontSize(FS.warn)
   let warnH = 0.5 + TH.warnH
   warnH += tmp.splitTextToSize(warnings.join(' '), footerWarnW).length * LS.warn
-  if (t.qrNutrition) {
+  if (t.qrNutrition && !label._isBoxLabel) {
     warnH += tmp.splitTextToSize(t.qrNutrition, footerWarnW).length * LS.warn
   }
   const qrColH = QR_SIZE + 2.0
@@ -564,19 +592,45 @@ export const generateLabelPDF = async (rawLabel, options = {}) => {
       y += TH.body
     }
 
+    // Address merged with website — sakecompany.com joins last line
     if (label.importer?.address) {
       y += LS.body - TH.body
       setFont(FS.body, 'normal')
-      const aR = doc.splitTextToSize(label.importer.address, TW)
+      const addrWithSite = `${label.importer.address}, ${t.website}`
+      const aR = doc.splitTextToSize(addrWithSite, TW)
       drawText(aR, BL.body)
       y += TH.body
       if (aR.length > 1) y += (aR.length - 1) * LS.body
+    } else {
+      // No address → website alone
+      y += LS.body - TH.body
+      setFont(FS.body, 'normal')
+      drawText(t.website, BL.body)
+      y += TH.body
     }
 
-    // Website
+    // "Per:" line — ALWAYS reserved. Empty row if no perText, so label height is stable.
     y += LS.body - TH.body
-    setFont(FS.body, 'normal')
-    drawText(t.website, BL.body)
+    if (label.perText) {
+      const perPrefix = 'Per: '
+      doc.setTextColor(130)
+      setFont(FS.body, 'normal')
+      doc.text(perPrefix, OX + M, OY + y + BL.body)
+      const perPrefixW = doc.getTextWidth(perPrefix)
+      doc.setTextColor(0)
+      setFont(FS.body, 'normal')
+      // Truncate if too wide to prevent wrapping — safety net
+      let perDisplay = label.perText
+      const availW = TW - perPrefixW
+      if (doc.getTextWidth(perDisplay) > availW) {
+        // Truncate character by character until it fits, add ellipsis
+        while (perDisplay.length > 1 && doc.getTextWidth(perDisplay + '…') > availW) {
+          perDisplay = perDisplay.slice(0, -1)
+        }
+        perDisplay = perDisplay + '…'
+      }
+      doc.text(perDisplay, OX + M + perPrefixW, OY + y + BL.body)
+    }
     y += TH.body
   }
 
@@ -584,16 +638,25 @@ export const generateLabelPDF = async (rawLabel, options = {}) => {
   y += 0.8
   const renderBcEndY = y
 
-  // ── BARCODE IMAGE (vertical, right column) ──
+  // ── BARCODE IMAGE (vertical, right column) — maximize size, preserve aspect ──
   if (barcodeImg) {
     try {
-      const bcX = OX + W - M - BC_W + 1
-      const bcAvailH = renderBcEndY - renderBcStartY - 2
-      const bcW = BC_W - 2.5                          // extra right margin to keep digits inside crop marks
-      const aspect = barcodeImg.height / barcodeImg.width
+      const bcAvailH = renderBcEndY - renderBcStartY - 1
+      const bcMaxW = BC_W - 1.5  // tight margin to maximize horizontal space
+      const aspect = barcodeImg.height / barcodeImg.width  // h/w of source
+
+      // Try max width first
+      let bcW = bcMaxW
       let bcH = bcW * aspect
-      if (bcH > bcAvailH) bcH = bcAvailH  // clamp to fit
-      const bcY = OY + renderBcStartY + 1 + (bcAvailH - bcH) / 2  // center vertically
+
+      // If too tall, scale down BOTH dimensions to preserve aspect (no stretching)
+      if (bcH > bcAvailH) {
+        bcH = bcAvailH
+        bcW = bcH / aspect
+      }
+
+      const bcX = OX + W - M - bcW + 0.3  // align right edge with content area
+      const bcY = OY + renderBcStartY + 0.5 + (bcAvailH - bcH) / 2
       doc.addImage(barcodeImg.dataUrl, 'PNG', bcX, bcY, bcW, bcH)
     } catch (e) { console.warn('[LabelPrinter] Barcode error:', e) }
   }
@@ -607,11 +670,33 @@ export const generateLabelPDF = async (rawLabel, options = {}) => {
   const wW = W - M - (M + QR_SIZE + 2.5) - 5  // 5mm safety buffer
 
   // QR code or Box icon
-  if (label._isBoxLabel && label._boxIconDataUrl) {
-    try {
-      const fmt = label._boxIconDataUrl.startsWith('data:image/jpeg') ? 'JPEG' : 'PNG'
-      doc.addImage(label._boxIconDataUrl, fmt, OX + M, qrY, QR_SIZE, QR_SIZE)
-    } catch { doc.rect(OX + M, qrY, QR_SIZE, QR_SIZE) }
+  if (label._isBoxLabel) {
+    // Box label: draw box icon (loaded PNG or canvas-generated fallback)
+    let boxDrawn = false
+    if (label._boxIconDataUrl) {
+      try {
+        const fmt = label._boxIconDataUrl.startsWith('data:image/jpeg') ? 'JPEG' : 'PNG'
+        doc.addImage(label._boxIconDataUrl, fmt, OX + M, qrY, QR_SIZE, QR_SIZE)
+        boxDrawn = true
+      } catch (e) { console.warn('[LabelPrinter] Box icon addImage failed:', e) }
+    }
+    if (!boxDrawn) {
+      // Draw a simple box icon directly with jsPDF shapes
+      const bx = OX + M, by = qrY, bs = QR_SIZE
+      doc.setDrawColor(80)
+      doc.setLineWidth(0.3)
+      doc.setFillColor(240, 240, 240)
+      // Box body
+      doc.rect(bx + bs * 0.1, by + bs * 0.3, bs * 0.8, bs * 0.6, 'FD')
+      // Box lid (trapezoid via lines)
+      doc.setFillColor(220, 220, 220)
+      doc.triangle(bx + bs * 0.1, by + bs * 0.3, bx + bs * 0.25, by + bs * 0.1, bx + bs * 0.9, by + bs * 0.3, 'FD')
+      doc.triangle(bx + bs * 0.25, by + bs * 0.1, bx + bs * 0.75, by + bs * 0.1, bx + bs * 0.9, by + bs * 0.3, 'FD')
+      // Center line
+      doc.setLineDash([0.5, 0.3])
+      doc.line(bx + bs * 0.5, by + bs * 0.3, bx + bs * 0.5, by + bs * 0.9)
+      doc.setLineDash([])
+    }
   } else if (label.qr) {
     try { doc.addImage(label.qr, 'PNG', OX + M, qrY, QR_SIZE, QR_SIZE) }
     catch { doc.rect(OX + M, qrY, QR_SIZE, QR_SIZE) }
@@ -635,8 +720,8 @@ export const generateLabelPDF = async (rawLabel, options = {}) => {
   doc.text(warnLines, wX, wy + BL.warn)
   wy += warnLines.length * LS.warn
 
-  // "Info nutrizionali nel QR" on its own line
-  if (t.qrNutrition) {
+  // "Info nutrizionali nel QR" — only on bottle labels (box has no QR)
+  if (t.qrNutrition && !label._isBoxLabel) {
     const nutLines = doc.splitTextToSize(t.qrNutrition, wW)
     doc.text(nutLines, wX, wy + BL.warn)
     wy += nutLines.length * LS.warn

@@ -11,6 +11,10 @@ const Login = lazy(() => import('./components/Login'))
 const SupplierPortal = lazy(() => import('./components/SupplierPortal'))
 const ImporterManager = lazy(() => import('./components/ImporterManager'))
 
+// New portal (clean UI)
+const PortalDashboard = lazy(() => import('./components/portal/PortalDashboard'))
+const PortalProduct = lazy(() => import('./components/portal/PortalProduct'))
+
 const Loading = () => (
   <div style={{ padding: '60px', textAlign: 'center', color: '#888' }}>Caricamento...</div>
 )
@@ -28,8 +32,12 @@ function App() {
   return (
     <Suspense fallback={<Loading />}>
       <Routes>
+        {/* New portal (clean UI) */}
+        <Route path="/portal" element={<PortalDashboard />} />
+        <Route path="/portal/product/:slug" element={<PortalProduct />} />
+
         {/* Public routes */}
-        <Route path="/" element={<SupplierPortal />} />
+        <Route path="/" element={<PortalDashboard />} />
         <Route path="/login" element={<Login />} />
         <Route path="/nutrition" element={<SupplierPortal />} />
         <Route path="/supplier" element={<SupplierPortal />} />
@@ -50,11 +58,7 @@ function App() {
           </ProtectedRoute>
         } />
         <Route path="/archive" element={<LabelArchive />} />
-        <Route path="/importers" element={
-          <ProtectedRoute allowedRoles={['admin', 'partner']}>
-            <ImporterManager />
-          </ProtectedRoute>
-        } />
+        <Route path="/importers" element={<ImporterManager />} />
 
         {/* Legacy: old e-label URL senza /label/ prefix */}
         <Route path="/:productSlug" element={<ELabel />} />

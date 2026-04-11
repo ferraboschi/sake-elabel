@@ -1,9 +1,13 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { searchLabels, getLabelStats } from '../services/labelStore'
+import { searchLabels, getLabelStats, markLabelDownloaded } from '../services/labelStore'
 import { downloadLabelPDF, downloadBoxLabelPDF } from '../services/labelPrinter'
+import LabelPreview from './portal/LabelPreview'
 
 const LANG_LABELS = {
+  it: 'Italiano', de: 'Deutsch', fr: 'Français', es: 'Español', ja: '日本語'
+}
+const LANG_SHORT = {
   it: 'IT', de: 'DE', fr: 'FR', es: 'ES', ja: 'JA'
 }
 const LANG_FLAGS = {
@@ -18,6 +22,7 @@ const LabelArchive = () => {
   const [filterLang, setFilterLang] = useState('')
   const [filterCountry, setFilterCountry] = useState('')
   const [busy, setBusy] = useState(null)
+  const [previewLabel, setPreviewLabel] = useState(null) // { label, mode: 'bottle' | 'box' }
 
   useEffect(() => {
     refreshLabels()
@@ -89,13 +94,21 @@ const LabelArchive = () => {
 
   const handleDownloadRetro = async (label) => {
     setBusy(label.id)
-    try { await downloadLabelPDF(label) } catch (e) { console.error(e) }
+    try {
+      await downloadLabelPDF(label)
+      markLabelDownloaded(label.id)
+      refreshLabels()
+    } catch (e) { console.error(e) }
     setBusy(null)
   }
 
   const handleDownloadBox = async (label) => {
     setBusy(label.id)
-    try { await downloadBoxLabelPDF(label) } catch (e) { console.error(e) }
+    try {
+      await downloadBoxLabelPDF(label)
+      markLabelDownloaded(label.id)
+      refreshLabels()
+    } catch (e) { console.error(e) }
     setBusy(null)
   }
 
@@ -215,29 +228,50 @@ const LabelArchive = () => {
                     <div style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '5px' }}>
                       {fmt.labels.map(label => (
                         <div key={label.id} style={{
-                          display: 'grid', gridTemplateColumns: '110px 100px 1fr auto',
-                          gap: '8px', alignItems: 'center',
-                          padding: '6px 10px', background: '#f8f9fb', borderRadius: '6px',
+                          display: 'grid', gridTemplateColumns: '160px 1fr auto auto',
+                          gap: '10px', alignItems: 'center',
+                          padding: '8px 12px', background: '#f8f9fb', borderRadius: '6px',
                           border: '1px solid #eef0f3',
                         }}>
-                          {/* Language + Country */}
-                          <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                          {/* Language (full name) + Country */}
+                          <div style={{ display: 'flex', gap: '4px', alignItems: 'center', flexWrap: 'wrap' }}>
                             <span style={{
                               fontSize: '12px', fontWeight: 700, color: '#1565c0',
-                              background: '#e3f2fd', padding: '2px 6px', borderRadius: '4px',
+                              background: '#e3f2fd', padding: '3px 8px', borderRadius: '4px',
+                              display: 'inline-flex', alignItems: 'center', gap: '4px',
                             }}>
-                              {LANG_FLAGS[label.language] || ''} {LANG_LABELS[label.language] || label.language}
+                              <span>{LANG_FLAGS[label.language] || ''}</span>
+                              <span>{LANG_LABELS[label.language] || label.language}</span>
                             </span>
                             <span style={{
                               fontSize: '10px', color: '#2e7d32', background: '#e8f5e9',
-                              padding: '1px 5px', borderRadius: '3px', fontWeight: 600,
+                              padding: '2px 6px', borderRadius: '3px', fontWeight: 600,
                             }}>
                               {label.country}
                             </span>
                           </div>
 
-                          {/* Date */}
-                          <span style={{ fontSize: '12px', color: '#888' }}>{fmtDate(label.generatedAt)}</span>
+                          {/* Dates: generated + last downloaded */}
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                            <span style={{ fontSize: '11px', color: '#555' }}>
+                              <strong style={{ color: '#888', fontWeight: 500 }}>Generata:</strong> {fmtDate(label.generatedAt)}
+                            </span>
+                            {label.lastDownloadedAt ? (
+                              <span style={{ fontSize: '11px', color: '#1e7a34' }}>
+                                <strong style={{ color: '#888', fontWeight: 500 }}>Ultimo download:</strong> {fmtDate(label.lastDownloadedAt)}
+                              </span>
+                            ) : (
+                              <span style={{ fontSize: '10px', color: '#aaa', fontStyle: 'italic' }}>
+                                Mai scaricata
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Preview button (prominent) */}
+                          <button onClick={() => setPreviewLabel({ label, mode: 'bottle' })}
+                            style={s.previewBtn} title="Anteprima etichetta">
+                            👁 PREVIEW
+                          </button>
 
                           {/* Download buttons */}
                           <div style={{ display: 'flex', gap: '4px' }}>
@@ -253,15 +287,10 @@ const LabelArchive = () => {
                             <a href={label.labelUrl} target="_blank" rel="noopener noreferrer" style={s.dlBtnLink} title="Pagina e-label">
                               E-LABEL
                             </a>
-                            <button onClick={() => navigate(`/admin/product/${label.productSlug}`)} style={s.dlBtnEdit} title="Modifica prodotto">
+                            <button onClick={() => navigate(`/portal/product/${encodeURIComponent(label.productSlug)}`)} style={s.dlBtnEdit} title="Modifica prodotto">
                               EDIT
                             </button>
                           </div>
-
-                          {/* Generated badge + date */}
-                          <span style={s.printedBadge} title={`Generata il ${fmtDate(label.generatedAt)}`}>
-                            Generata {fmtDate(label.generatedAt)}
-                          </span>
                         </div>
                       ))}
                     </div>
@@ -270,6 +299,95 @@ const LabelArchive = () => {
               </div>
             )
           })}
+        </div>
+      )}
+
+      {/* Preview Modal — identical to final PDF */}
+      {previewLabel && (
+        <div onClick={() => setPreviewLabel(null)} style={{
+          position: 'fixed', inset: 0, background: 'rgba(10,22,40,0.6)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          zIndex: 9999, padding: '20px', backdropFilter: 'blur(4px)',
+        }}>
+          <div onClick={e => e.stopPropagation()} style={{
+            background: 'white', borderRadius: '12px', padding: '20px',
+            maxWidth: '360px', width: '100%', maxHeight: '90vh', overflowY: 'auto',
+            boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+          }}>
+            {/* Modal header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', paddingBottom: '10px', borderBottom: '1px solid #eee' }}>
+              <div>
+                <div style={{ fontSize: '13px', fontWeight: 700 }}>{previewLabel.label.productName}</div>
+                <div style={{ fontSize: '11px', color: '#888' }}>
+                  {previewLabel.label.productCode} · {LANG_FLAGS[previewLabel.label.language]} {LANG_LABELS[previewLabel.label.language]} · {previewLabel.label.country}
+                </div>
+              </div>
+              <button onClick={() => setPreviewLabel(null)} style={{
+                width: '28px', height: '28px', borderRadius: '6px', border: 'none',
+                background: '#f0f0f0', fontSize: '16px', cursor: 'pointer',
+              }}>×</button>
+            </div>
+
+            {/* Bottle/Box toggle */}
+            <div style={{ display: 'flex', gap: '4px', marginBottom: '12px', background: '#f5f4f1', borderRadius: '6px', padding: '3px' }}>
+              <button onClick={() => setPreviewLabel(p => ({ ...p, mode: 'bottle' }))}
+                style={{
+                  flex: 1, padding: '6px 10px', fontSize: '11px', fontWeight: 600, border: 'none', cursor: 'pointer',
+                  borderRadius: '4px', transition: 'all 0.12s',
+                  background: previewLabel.mode === 'bottle' ? '#0a1628' : 'transparent',
+                  color: previewLabel.mode === 'bottle' ? 'white' : '#8b8b9e',
+                }}>
+                🍶 Bottiglia
+              </button>
+              <button onClick={() => setPreviewLabel(p => ({ ...p, mode: 'box' }))}
+                style={{
+                  flex: 1, padding: '6px 10px', fontSize: '11px', fontWeight: 600, border: 'none', cursor: 'pointer',
+                  borderRadius: '4px', transition: 'all 0.12s',
+                  background: previewLabel.mode === 'box' ? '#0a1628' : 'transparent',
+                  color: previewLabel.mode === 'box' ? 'white' : '#8b8b9e',
+                }}>
+                📦 Box
+              </button>
+            </div>
+
+            {/* Label Preview — uses same component as product page */}
+            <LabelPreview
+              name={previewLabel.label.productName || ''}
+              category={previewLabel.label.category || ''}
+              legalDescription={previewLabel.label.legalDescription || ''}
+              ingredients={(previewLabel.label.ingredients || {})[previewLabel.label.language] || (previewLabel.label.ingredients || {}).it || ''}
+              alcoholPct={previewLabel.label.alcoholPct || ''}
+              volumeMl={previewLabel.label.volumeMl || ''}
+              code={previewLabel.label.productCode || ''}
+              barcode={previewLabel.mode === 'box' ? (previewLabel.label.barcodeBox || '') : (previewLabel.label.barcode || '')}
+              countryOfOrigin={previewLabel.label.countryOfOrigin || 'Japan'}
+              importer={{ name: previewLabel.label.importerName || '', address: previewLabel.label.importerAddress || '' }}
+              perText={previewLabel.label.perText || ''}
+              lang={previewLabel.label.language || 'it'}
+              isBox={previewLabel.mode === 'box'}
+              bottlesPerBox={previewLabel.label.bottlesPerBox || ''}
+            />
+
+            {/* Download buttons in modal */}
+            <div style={{ display: 'flex', gap: '6px', marginTop: '14px' }}>
+              <button onClick={() => handleDownloadRetro(previewLabel.label)}
+                disabled={busy === previewLabel.label.id}
+                style={{
+                  flex: 1, padding: '10px', background: '#0a1628', color: 'white',
+                  border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: 'pointer',
+                }}>
+                🖨 Scarica Bottiglia
+              </button>
+              <button onClick={() => handleDownloadBox(previewLabel.label)}
+                disabled={busy === previewLabel.label.id}
+                style={{
+                  flex: 1, padding: '10px', background: '#2c4a6e', color: 'white',
+                  border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: 'pointer',
+                }}>
+                📦 Scarica Box
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
@@ -330,9 +448,10 @@ const s = {
     fontSize: '11px', fontWeight: 600, color: '#0369a1', background: '#e0f2fe',
     padding: '2px 7px', borderRadius: '10px',
   },
-  printedBadge: {
-    fontSize: '9px', fontWeight: 600, color: '#1e7a34', background: '#d4edda',
-    padding: '2px 6px', borderRadius: '4px', whiteSpace: 'nowrap',
+  previewBtn: {
+    padding: '6px 12px', fontSize: '11px', fontWeight: 700, cursor: 'pointer',
+    border: '1.5px solid #0a1628', borderRadius: '5px', background: '#0a1628', color: 'white',
+    letterSpacing: '0.3px', whiteSpace: 'nowrap',
   },
 }
 

@@ -396,6 +396,7 @@ export default function SupplierPortal() {
   // Autosave: debounce timers keyed by group key
   const autosaveTimers = useRef({})
   const latestGroupsRef = useRef([]) // keep latest filteredGroups for autosave callback
+  const saveGroupRef = useRef(null)  // keep latest saveGroup for autosave callback
   const [modalForm, setModalForm] = useState({ name: '', address: '', website: '', lang: 'it', regionCode: 'ITA' })
   const [allImporters, setAllImporters] = useState([])
   const { generate, generating: generatingLabel, generateQR } = useGenerateLabel()
@@ -742,7 +743,9 @@ export default function SupplierPortal() {
         }
         const eanBoxVal = eanBoxEditData[item._recordId]
         if (eanBoxVal !== undefined && eanBoxVal !== '') {
-          itemPayload.eanBox = parseInt(eanBoxVal, 10) || 0
+          // EAN Box can be 13-digit EAN or 14-digit ITF-14 — preserve as string if non-numeric
+          const eanBoxNum = parseInt(eanBoxVal, 10)
+          itemPayload.eanBox = (!isNaN(eanBoxNum) && String(eanBoxNum) === eanBoxVal.trim()) ? eanBoxNum : eanBoxVal
         }
         const bpbVal = bottlesPerBoxEditData[item._recordId]
         if (bpbVal !== undefined && bpbVal !== '') {
@@ -782,6 +785,9 @@ export default function SupplierPortal() {
     }
   }
 
+  // Keep saveGroupRef always pointing to latest saveGroup (avoids stale closure)
+  saveGroupRef.current = saveGroup
+
   // Autosave: schedule a debounced save for a group (2 seconds after last edit)
   const scheduleAutosave = useCallback((groupKey) => {
     if (autosaveTimers.current[groupKey]) clearTimeout(autosaveTimers.current[groupKey])
@@ -789,7 +795,7 @@ export default function SupplierPortal() {
       delete autosaveTimers.current[groupKey]
       // Find the group from the latest filteredGroups or productGroups
       const group = latestGroupsRef.current.find(g => g.key === groupKey)
-      if (group) saveGroup(group)
+      if (group) saveGroupRef.current(group)
     }, 2000)
   }, [])
 

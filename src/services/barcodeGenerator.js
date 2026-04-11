@@ -119,20 +119,33 @@ export function generateBarcodePdfDataUrl(ean) {
 export function generateVerticalBarcodePdfDataUrl(ean) {
   if (!ean) return null
   const clean = String(ean).replace(/\s/g, '')
-  const fmt = detectBarcodeFormat(clean)
+  let fmt = detectBarcodeFormat(clean)
+
+  // If EAN13 but checksum invalid, fall back to CODE128 so barcode still prints
+  if (fmt === 'EAN13' && !isValidEAN13(clean)) {
+    console.warn(`[BarcodeGenerator] EAN13 checksum invalid for "${clean}", falling back to CODE128`)
+    fmt = 'CODE128'
+  }
+  // Any other invalid format → CODE128 fallback if it contains alphanumerics
+  if (!fmt && /^[\x20-\x7E]+$/.test(clean)) {
+    fmt = 'CODE128'
+  }
   if (!fmt) return null
 
   try {
     // Step 1: Generate barcode at high resolution for crisp text
     const srcCanvas = document.createElement('canvas')
 
+    const barWidth = fmt === 'ITF14' ? 6 : fmt === 'CODE128' ? 4 : 5
+    const barHeight = fmt === 'ITF14' ? 130 : 110
+
     JsBarcode(srcCanvas, clean, {
       format: fmt,
-      width: fmt === 'ITF14' ? 6 : 5,   // wider bars for readability after rotation
-      height: fmt === 'ITF14' ? 130 : 110,
+      width: barWidth,
+      height: barHeight,
       displayValue: true,
       fontSize: 24,       // large font for crisp numbers after rotation
-      font: 'monospace',  // monospace for clean digit rendering
+      font: 'monospace',
       textMargin: 4,
       margin: 8,
       background: '#ffffff',
