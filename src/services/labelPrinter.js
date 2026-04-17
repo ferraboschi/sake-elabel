@@ -364,6 +364,12 @@ export const generateLabelPDF = async (rawLabel, options = {}) => {
     nameLines = tmp.splitTextToSize(titleText, titleAvailW)
     if (nameLines.length <= 2) break
   }
+  // Hard clamp: guarantee max 2 title lines (ellipsis if truncated)
+  if (nameLines.length > 2) {
+    nameLines = nameLines.slice(0, 2)
+    const last = nameLines[1].replace(/\s+$/, '')
+    nameLines[1] = last.length > 2 ? last.slice(0, -1).replace(/\s+$/, '') + '\u2026' : last + '\u2026'
+  }
   cy += nameLines.length * titleStyle.ls
 
   // Category
@@ -511,7 +517,13 @@ export const generateLabelPDF = async (rawLabel, options = {}) => {
   y += 1.4
   doc.setTextColor(0)
   setFont(titleStyle.pt, 'bold')
-  const nameR = doc.splitTextToSize(titleText, titleAvailW)
+  let nameR = doc.splitTextToSize(titleText, titleAvailW)
+  // Hard clamp: guarantee max 2 title lines (ellipsis if truncated)
+  if (nameR.length > 2) {
+    nameR = nameR.slice(0, 2)
+    const last = nameR[1].replace(/\s+$/, '')
+    nameR[1] = last.length > 2 ? last.slice(0, -1).replace(/\s+$/, '') + '\u2026' : last + '\u2026'
+  }
   drawText(nameR, titleStyle.bl)
   y += nameR.length * titleStyle.ls
 
