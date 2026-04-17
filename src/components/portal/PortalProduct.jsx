@@ -666,19 +666,21 @@ export default function PortalProduct() {
                     )}
                   </div>
                 </div>
-                <div style={{ marginTop: 6 }}>
-                  <div style={{ fontSize: 10, color: 'var(--portal-ink-muted)', marginBottom: 2 }}>{jp ? '入数' : 'Bottiglie/box'}</div>
-                  <input className="portal-input" style={{ width: 56 }}
-                    value={bpbData[item._recordId] || ''} onChange={e => updateBpb(item._recordId, normalizeNumeric(e.target.value))} />
-                </div>
-                <div style={{ marginTop: 6 }}>
-                  <div style={{ fontSize: 10, color: 'var(--portal-ink-muted)', marginBottom: 2 }}>{jp ? 'ロット' : 'Lotto'}</div>
-                  <input
-                    className="portal-input"
-                    style={{ width: 120 }}
-                    placeholder={jp ? 'Es: L2026-04' : 'Es: L2026-04'}
-                    value={lotData[item._recordId] || ''}
-                    onChange={e => updateLot(item._recordId, e.target.value)} />
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginTop: 6 }}>
+                  <div>
+                    <div style={{ fontSize: 10, color: 'var(--portal-ink-muted)', marginBottom: 2 }}>{jp ? '入数' : 'Bottiglie/box'}</div>
+                    <input className="portal-input" style={{ width: 56 }}
+                      value={bpbData[item._recordId] || ''} onChange={e => updateBpb(item._recordId, normalizeNumeric(e.target.value))} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 10, color: 'var(--portal-ink-muted)', marginBottom: 2 }}>{jp ? 'ロット' : 'Lotto'}</div>
+                    <input
+                      className="portal-input"
+                      style={{ width: '100%', textAlign: 'left', boxSizing: 'border-box' }}
+                      placeholder={jp ? 'Es: L2026-04' : 'Es: L2026-04'}
+                      value={lotData[item._recordId] || ''}
+                      onChange={e => updateLot(item._recordId, e.target.value)} />
+                  </div>
                 </div>
               </div>
               )
