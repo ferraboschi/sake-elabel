@@ -331,7 +331,7 @@ export const generateLabelPDF = async (rawLabel, options = {}) => {
 
   const W = options.widthMm || LABEL_W
   const M = MARGIN
-  const TEXT_BUFFER = 3                              // safety buffer: jsPDF underestimates text width
+  const TEXT_BUFFER = 2                              // safety buffer: jsPDF underestimates text width (reduced from 3 to allow single-line origin text)
   const CW = W - M * 2 - TEXT_BUFFER                // content width with safety margin
   const BC_W = BARCODE_COL_W                         // ALWAYS reserve barcode column — layout identical with or without EAN
   const TW = CW - BC_W                              // text width (always narrowed to keep layout consistent)
