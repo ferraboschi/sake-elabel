@@ -115,6 +115,7 @@ export default function PortalProduct() {
   const [eanData, setEanData] = useState({})
   const [eanBoxData, setEanBoxData] = useState({})
   const [bpbData, setBpbData] = useState({})
+  const [lotData, setLotData] = useState({})
 
   // Title editor modal
   const [showTitleEditor, setShowTitleEditor] = useState(false)
@@ -167,15 +168,17 @@ export default function PortalProduct() {
               proteinG: f.nutrition?.protein ?? '',
               saltG: f.nutrition?.salt ?? '',
             })
-            const ean = {}, ebox = {}, bpb = {}
+            const ean = {}, ebox = {}, bpb = {}, lot = {}
             for (const s of siblings) {
               ean[s._recordId] = s.barcode || ''
               ebox[s._recordId] = s.barcodeBox || ''
               bpb[s._recordId] = s.bottlesPerBox || ''
+              lot[s._recordId] = ''
             }
             setEanData(ean)
             setEanBoxData(ebox)
             setBpbData(bpb)
+            setLotData(lot)
           }
         }
       }
@@ -259,6 +262,7 @@ export default function PortalProduct() {
   const updateEan = (id, v) => { setEanData(p => ({ ...p, [id]: v })); scheduleAutosave() }
   const updateEanBox = (id, v) => { setEanBoxData(p => ({ ...p, [id]: v })); scheduleAutosave() }
   const updateBpb = (id, v) => { setBpbData(p => ({ ...p, [id]: v })); scheduleAutosave() }
+  const updateLot = (id, v) => { setLotData(p => ({ ...p, [id]: v })) }
 
   // Title editor functions
   const openTitleEditor = () => {
@@ -364,6 +368,7 @@ export default function PortalProduct() {
         barcode: eanData[item._recordId] || item.barcode || '',
         barcodeBox: eanBoxData[item._recordId] || item.barcodeBox || '',
         bottlesPerBox: bpbData[item._recordId] || item.bottlesPerBox || '',
+        lotNumber: lotData[item._recordId] || '',
         alcoholPct: parseFloat(ed.alcoholPct) || item.alcoholPct,
         qr,
         language: printLang,
@@ -665,6 +670,15 @@ export default function PortalProduct() {
                   <div style={{ fontSize: 10, color: 'var(--portal-ink-muted)', marginBottom: 2 }}>{jp ? '入数' : 'Bottiglie/box'}</div>
                   <input className="portal-input" style={{ width: 56 }}
                     value={bpbData[item._recordId] || ''} onChange={e => updateBpb(item._recordId, normalizeNumeric(e.target.value))} />
+                </div>
+                <div style={{ marginTop: 6 }}>
+                  <div style={{ fontSize: 10, color: 'var(--portal-ink-muted)', marginBottom: 2 }}>{jp ? 'ロット' : 'Lotto'}</div>
+                  <input
+                    className="portal-input"
+                    style={{ width: 120 }}
+                    placeholder={jp ? 'Es: L2026-04' : 'Es: L2026-04'}
+                    value={lotData[item._recordId] || ''}
+                    onChange={e => updateLot(item._recordId, e.target.value)} />
                 </div>
               </div>
               )

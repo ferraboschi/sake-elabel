@@ -203,6 +203,7 @@ const TRANSLATIONS = {
     minor: 'Vietata la vendita ai minori di 18 anni.',
     storage: 'Conservare in luogo fresco e asciutto e al riparo dalla luce.',
     lot: 'Lotto: vedi sulla confezione',
+    lotPrefix: 'Lotto:',
     code: 'Cod.',
     website: 'sakecompany.com',
     qrNutrition: 'Info nutrizionali nel QR',
@@ -217,6 +218,7 @@ const TRANSLATIONS = {
     minor: 'Verkauf an Minderjährige unter 18 Jahren verboten.',
     storage: 'Kühl und trocken lagern, vor Licht schützen.',
     lot: 'Los: siehe Verpackung',
+    lotPrefix: 'Los:',
     code: 'Art.-Nr.',
     website: 'sakecompany.com',
     qrNutrition: 'Nährwertangaben im QR',
@@ -231,6 +233,7 @@ const TRANSLATIONS = {
     minor: 'Vente interdite aux mineurs de moins de 18 ans.',
     storage: 'Conserver dans un endroit frais et sec, à l\'abri de la lumière.',
     lot: 'Lot : voir emballage',
+    lotPrefix: 'Lot :',
     code: 'Réf.',
     website: 'sakecompany.com',
     qrNutrition: 'Info nutritionnelles dans le QR',
@@ -245,6 +248,7 @@ const TRANSLATIONS = {
     minor: 'Prohibida la venta a menores de 18 años.',
     storage: 'Conservar en lugar fresco y seco, protegido de la luz.',
     lot: 'Lote: ver envase',
+    lotPrefix: 'Lote:',
     code: 'Cód.',
     website: 'sakecompany.com',
     qrNutrition: 'Info nutricional en el QR',
@@ -259,6 +263,7 @@ const TRANSLATIONS = {
     minor: '18歳未満の方への販売は禁止されています。',
     storage: '直射日光を避け、涼しく乾燥した場所に保管してください。',
     lot: 'ロット：パッケージ参照',
+    lotPrefix: 'ロット：',
     code: 'コード',
     website: 'sakecompany.com',
     qrNutrition: '栄養成分表示はQRコードに記載',
@@ -309,6 +314,7 @@ function normalizeLabel(raw) {
     ingredients: raw.ingredients || null,
     allergens: raw.allergens || null,
     bottlesPerBox: raw.bottlesPerBox || null,
+    lotNumber: raw.lotNumber || '',
   }
 }
 
@@ -771,7 +777,10 @@ export const generateLabelPDF = async (rawLabel, options = {}) => {
   doc.setTextColor(0)
   doc.text(`${t.code} ${label.code || ''}`, OX + M, bottomRowY)
   doc.setTextColor(100)
-  doc.text(t.lot, wX, bottomRowY)
+  const lotDisplay = label.lotNumber
+    ? `${t.lotPrefix} ${label.lotNumber}`
+    : t.lot
+  doc.text(lotDisplay, wX, bottomRowY)
   doc.setTextColor(0)
 
   // ── CROP MARKS ──
