@@ -384,11 +384,11 @@ export default function PortalProduct() {
   }
 
   // Title validation (needed before canPrint check below)
-  const displayName = ed.editedName || first.name
-  const titleLines = estimateTitleLines(displayName)
+  const displayName = ed.editedName || first.name || ''
+  const titleLines = estimateTitleLines(displayName || '')
   const isTitleTooLong = titleLines > 2
   const maxCharsFor2Lines = getMaxCharsFor2Lines(2)
-  const displayCharsCount = displayName.length
+  const displayCharsCount = (displayName || '').length
 
   // Completeness check
   const hasIngredients = !!(ed.ingredientsIt || '').trim()
