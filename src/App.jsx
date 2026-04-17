@@ -52,11 +52,6 @@ function App() {
             <AdminPage />
           </ProtectedRoute>
         } />
-        <Route path="/admin/product/:slug" element={
-          <ProtectedRoute allowedRoles={['admin', 'partner']}>
-            <AdminPage />
-          </ProtectedRoute>
-        } />
         <Route path="/archive" element={<LabelArchive />} />
         <Route path="/importers" element={<ImporterManager />} />
 
