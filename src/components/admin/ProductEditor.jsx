@@ -73,7 +73,7 @@ const ProductEditor = ({
       allergens: product.allergens?.[selectedLanguage] || product.allergens?.it || '',
       alcoholPct: product.alcoholPct || '',
       volumeMl: product.volumeMl || '',
-      countryOfOrigin: product.countryOfOrigin || 'Giappone',
+      countryOfOrigin: product.countryOfOrigin || 'Japan',
       eanBox: product.barcodeBox || '',
     })
   }, [product?.slug, selectedLanguage])

@@ -266,6 +266,30 @@ const TRANSLATIONS = {
 }
 
 // ═══════════════════════════════════════════════════════
+// COUNTRY NAME TRANSLATIONS
+// Maps country names to their translations per language.
+// Accepts both English keys (canonical) and Italian keys
+// (legacy data), so existing records continue to work.
+// ═══════════════════════════════════════════════════════
+
+export const COUNTRY_NAMES = {
+  'Japan': {
+    it: 'Giappone',
+    de: 'Japan',
+    fr: 'Japon',
+    es: 'Japón',
+    ja: '日本',
+  },
+  'Giappone': {
+    it: 'Giappone',
+    de: 'Japan',
+    fr: 'Japon',
+    es: 'Japón',
+    ja: '日本',
+  },
+}
+
+// ═══════════════════════════════════════════════════════
 // NORMALIZE — maps raw product/store fields to uniform label obj
 // ═══════════════════════════════════════════════════════
 
@@ -396,7 +420,8 @@ export const generateLabelPDF = async (rawLabel, options = {}) => {
     cy += 0.4
     tmp.setFontSize(FS.body)
     if (label.countryOfOrigin) {
-      const oLines = tmp.splitTextToSize(`${t.origin} ${label.countryOfOrigin}`, TW)
+      const countryName = COUNTRY_NAMES[label.countryOfOrigin]?.[lang] || label.countryOfOrigin
+      const oLines = tmp.splitTextToSize(`${t.origin} ${countryName}`, TW)
       cy += TH.body
       if (oLines.length > 1) cy += (oLines.length - 1) * LS.body
     }
@@ -571,7 +596,8 @@ export const generateLabelPDF = async (rawLabel, options = {}) => {
     setFont(FS.body, 'bold')
 
     if (label.countryOfOrigin) {
-      const originText = `${t.origin} ${label.countryOfOrigin}`
+      const countryName = COUNTRY_NAMES[label.countryOfOrigin]?.[lang] || label.countryOfOrigin
+      const originText = `${t.origin} ${countryName}`
       const oR = doc.splitTextToSize(originText, TW)
       drawText(oR, BL.body)
       y += TH.body

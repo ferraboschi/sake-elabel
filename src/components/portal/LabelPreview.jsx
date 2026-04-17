@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react'
 import JsBarcode from 'jsbarcode'
+import { COUNTRY_NAMES } from '../../services/labelPrinter'
 
 /**
  * Live preview of the back label, replicating labelPrinter.js layout.
@@ -104,7 +105,7 @@ export default function LabelPreview({
           <div style={S.sep} />
 
           {countryOfOrigin && (
-            <div style={{ fontSize: '6.5px', fontWeight: 600, marginBottom: 2 }}>{t.origin} {countryOfOrigin}</div>
+            <div style={{ fontSize: '6.5px', fontWeight: 600, marginBottom: 2 }}>{t.origin} {COUNTRY_NAMES[countryOfOrigin]?.[lang] || countryOfOrigin}</div>
           )}
 
           {importer?.name && (
