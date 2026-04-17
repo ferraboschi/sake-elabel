@@ -136,24 +136,69 @@ export default function PortalProduct() {
   const { generate, generating } = useGenerateLabel()
   const autosaveTimer = useRef(null)
   const saveRef = useRef(null)
+  // Keep track of known record IDs so we can find the product even after a name/slug change
+  const knownRecordIds = useRef([])
+  // Track IME composition state so Enter during composition confirms characters, not saves
+  const titleComposingRef = useRef(false)
 
   const first = items[0] || {}
 
   // Load product
   useEffect(() => { if (slug) loadProduct() }, [slug])
 
-  const loadProduct = async () => {
-    setLoading(true)
+  // Flush autosave before page unload
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (autosaveTimer.current) {
+        clearTimeout(autosaveTimer.current)
+        console.log('[beforeunload] Flushing pending autosave')
+        saveRef.current?.()
+      }
+    }
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [])
+
+  const loadProduct = async ({ silent = false } = {}) => {
+    if (!silent) setLoading(true)
     try {
       if (isAirtableConfigured()) {
         const all = await fetchProducts()
         if (all) {
           const decoded = decodeURIComponent(slug)
-          const match = all.find(p => p.slug === decoded || p.code === decoded.toUpperCase())
+
+          // 1. Try exact slug match
+          let match = all.find(p => p.slug === decoded)
+
+          // 2. Try exact code match (e.g. URL is just "SC001")
+          if (!match) {
+            match = all.find(p => p.code === decoded.toUpperCase())
+          }
+
+          // 3. Try extracting code suffix from slug (slug format: "name-parts-CODE")
+          //    This handles the case where the product name changed and the slug no longer matches
+          if (!match) {
+            const parts = decoded.split('-')
+            const codeSuffix = parts[parts.length - 1]?.toUpperCase()
+            if (codeSuffix) {
+              match = all.find(p => p.code === codeSuffix)
+            }
+          }
+
+          // 4. Try matching by known record IDs from a previous load
+          if (!match && knownRecordIds.current.length) {
+            match = all.find(p => knownRecordIds.current.includes(p._recordId))
+          }
+
           if (match) {
+            console.log('[loadProduct] Found product:', match.name, 'slug:', match.slug, 'code:', match.code)
             const siblings = all.filter(p => p.name === match.name)
               .sort((a, b) => (b.volumeMl || 0) - (a.volumeMl || 0))
             setItems(siblings)
+
+            // Store record IDs so we can find them again after a rename
+            knownRecordIds.current = siblings.map(s => s._recordId)
+
             const f = siblings[0]
             setEd({
               editedName: '',
@@ -179,15 +224,24 @@ export default function PortalProduct() {
             setEanBoxData(ebox)
             setBpbData(bpb)
             setLotData(lot)
+
+            // If the slug changed (e.g. after a title rename), update the URL silently
+            if (match.slug !== decoded) {
+              console.log('[loadProduct] Slug changed, updating URL:', decoded, '->', match.slug)
+              navigate(`/portal/product/${encodeURIComponent(match.slug)}`, { replace: true })
+            }
+          } else {
+            console.warn('[loadProduct] No product found for slug:', decoded)
           }
         }
       }
     } catch (err) { console.error('[PortalProduct]', err) }
-    setLoading(false)
+    if (!silent) setLoading(false)
   }
 
-  // Autosave via ref (avoids stale closure)
-  const doSave = useCallback(async () => {
+  // Autosave - use ref to always get latest state
+  const doSave = async () => {
+    console.log('[doSave] Starting save, ed.editedName:', ed.editedName)
     if (!items.length) return
     setSaving(true)
     try {
@@ -209,9 +263,13 @@ export default function PortalProduct() {
       if (!isNaN(alc) && alc >= 0) payload.alcoholPct = alc
       // Save edited title if provided
       if (d.editedName && d.editedName.trim()) {
-        payload.name = d.editedName.trim()
+        console.log('[doSave] Saving title:', d.editedName.trim())
+        payload.productName = d.editedName.trim()
+      } else {
+        console.log('[doSave] Not saving title (editedName is empty or falsy)')
       }
 
+      console.log('[doSave] Payload:', payload)
       for (const item of items) {
         const ip = { ...payload }
         const ev = eanData[item._recordId]
@@ -226,15 +284,23 @@ export default function PortalProduct() {
         }
         const bv = bpbData[item._recordId]
         if (bv !== undefined && bv !== '') ip.bottlesPerBox = parseInt(bv, 10) || 0
-        await updateProduct(item._recordId, ip)
+        console.log('[doSave] Updating item', item._recordId, 'with payload:', ip)
+        try {
+          await updateProduct(item._recordId, ip)
+          console.log('[doSave] Item updated successfully:', item._recordId)
+        } catch (updateErr) {
+          console.error('[doSave] Failed to update item', item._recordId, updateErr)
+          throw updateErr
+        }
       }
       setSaved(true)
+      console.log('[doSave] Save completed successfully')
     } catch (err) {
       console.error('[Save]', err)
       alert(`Save error: ${err.message}`)
     }
     setSaving(false)
-  }, [items, ed, eanData, eanBoxData, bpbData])
+  }
 
   saveRef.current = doSave
 
@@ -271,12 +337,80 @@ export default function PortalProduct() {
     setShowTitleEditor(true)
   }
 
-  const saveTitleEdit = () => {
+  const saveTitleEdit = async () => {
+    console.log('[saveTitleEdit] titleEditorValue:', titleEditorValue)
     if (titleEditorValue.trim()) {
-      setEd(prev => ({ ...prev, editedName: titleEditorValue.trim() }))
-      scheduleAutosave()
+      const newTitle = titleEditorValue.trim()
+      console.log('[saveTitleEdit] saving new title:', newTitle)
+
+      // 1. Cancel any pending autosave to avoid race conditions
+      if (autosaveTimer.current) {
+        clearTimeout(autosaveTimer.current)
+        autosaveTimer.current = null
+        console.log('[saveTitleEdit] Cancelled pending autosave')
+      }
+
+      // 2. Update state with new title
+      setEd(prev => ({ ...prev, editedName: newTitle }))
+      setShowTitleEditor(false)
+
+      // 3. Save to Airtable — build a COMPLETE payload (same as doSave) with the new title
+      setSaving(true)
+      try {
+        const payload = { productName: newTitle }
+
+        // Include all current field values (mirror doSave logic)
+        for (const f of NUTRITION_FIELDS) {
+          payload[f.key] = parseFloat(normalizeNumeric(String(ed[f.key]))) || 0
+        }
+        payload.ingredientsIt = normalizeFullWidth(ed.ingredientsIt) || ''
+        // Auto-translate ingredients
+        const raw = payload.ingredientsIt
+        if (raw) {
+          for (const [l, suf] of Object.entries({ en: 'En', de: 'De', fr: 'Fr', es: 'Es' })) {
+            const { text } = autoTranslate(raw, l)
+            if (text) payload[`ingredients${suf}`] = text
+          }
+        }
+        const alc = parseFloat(normalizeNumeric(String(ed.alcoholPct)))
+        if (!isNaN(alc) && alc >= 0) payload.alcoholPct = alc
+
+        // Save for all items (siblings = different sizes of same product)
+        for (const item of items) {
+          const ip = { ...payload }
+          const ev = eanData[item._recordId]
+          if (ev !== undefined && ev !== '') {
+            ip.barcode = ev
+            if (ev.length === 13) { const n = parseInt(ev, 10); if (!isNaN(n)) ip.ean = n }
+          }
+          const ebv = eanBoxData[item._recordId]
+          if (ebv !== undefined && ebv !== '') {
+            const num = parseInt(ebv, 10)
+            ip.eanBox = (!isNaN(num) && String(num) === ebv.trim()) ? num : ebv
+          }
+          const bv = bpbData[item._recordId]
+          if (bv !== undefined && bv !== '') ip.bottlesPerBox = parseInt(bv, 10) || 0
+
+          console.log('[saveTitleEdit] Updating item', item._recordId, 'payload:', ip)
+          await updateProduct(item._recordId, ip)
+          console.log('[saveTitleEdit] Item saved:', item._recordId)
+        }
+
+        setSaved(true)
+        console.log('[saveTitleEdit] Title saved to Airtable successfully')
+
+        // 4. Reload data from Airtable to confirm save persisted
+        //    and update the URL if the slug changed (silent = no loading spinner)
+        await loadProduct({ silent: true })
+        console.log('[saveTitleEdit] Data reloaded from Airtable')
+      } catch (err) {
+        console.error('[saveTitleEdit] Save failed:', err)
+        alert(`Errore nel salvataggio del titolo: ${err.message}`)
+      }
+      setSaving(false)
+    } else {
+      setShowTitleEditor(false)
     }
-    setShowTitleEditor(false)
   }
 
   // Importers
@@ -491,28 +625,34 @@ export default function PortalProduct() {
                       <input
                         value={titleEditorValue}
                         onChange={e => setTitleEditorValue(e.target.value)}
+                        onCompositionStart={() => { titleComposingRef.current = true; }}
+                        onCompositionEnd={() => { titleComposingRef.current = false; }}
                         onKeyDown={e => {
-                          if (e.key === 'Enter') saveTitleEdit()
-                          if (e.key === 'Escape') setShowTitleEditor(false)
+                          // During IME composition, Enter confirms the composition — do not save
+                          if (titleComposingRef.current) return;
+                          if (e.key === 'Enter') { e.preventDefault(); saveTitleEdit(); }
+                          if (e.key === 'Escape') { e.preventDefault(); setShowTitleEditor(false); }
                         }}
                         autoFocus
                         style={{
                           fontSize: 'inherit', fontWeight: 700, letterSpacing: '0.3px',
-                          textTransform: 'uppercase', border: '1.5px solid #4a90d9',
+                          border: '1.5px solid #4a90d9',
                           borderRadius: 4, padding: '2px 6px', width: '100%', maxWidth: 340,
                           outline: 'none', background: '#f0f7ff', fontFamily: 'inherit'
                         }}
                       />
-                      <span
-                        onClick={saveTitleEdit}
-                        style={{ cursor: 'pointer', fontSize: 14, color: '#2ecc71', flexShrink: 0 }}
+                      <button
+                        type="button"
+                        onClick={() => saveTitleEdit()}
+                        style={{ cursor: 'pointer', fontSize: 14, color: '#2ecc71', flexShrink: 0, background: 'none', border: 'none', padding: '2px 4px', lineHeight: 1 }}
                         title="Salva (Invio)"
-                      >✔</span>
-                      <span
+                      >✔</button>
+                      <button
+                        type="button"
                         onClick={() => setShowTitleEditor(false)}
-                        style={{ cursor: 'pointer', fontSize: 14, color: '#e74c3c', flexShrink: 0 }}
+                        style={{ cursor: 'pointer', fontSize: 14, color: '#e74c3c', flexShrink: 0, background: 'none', border: 'none', padding: '2px 4px', lineHeight: 1 }}
                         title="Annulla (Esc)"
-                      >✖</span>
+                      >✖</button>
                       <span style={{ fontSize: 12, color: titleEditorValue.length > maxCharsFor2Lines ? '#e74c3c' : '#888', flexShrink: 0 }}>
                         {titleEditorValue.length}/{maxCharsFor2Lines}
                       </span>
