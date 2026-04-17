@@ -481,24 +481,57 @@ export default function PortalProduct() {
               </div>
               <div style={{ flex: 1 }}>
                 <div className="portal-detail-title">
-                  {displayName}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 8 }}>
-                    {isTitleTooLong && (
+                  {showTitleEditor ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                      <input
+                        value={titleEditorValue}
+                        onChange={e => setTitleEditorValue(e.target.value)}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter') saveTitleEdit()
+                          if (e.key === 'Escape') setShowTitleEditor(false)
+                        }}
+                        autoFocus
+                        style={{
+                          fontSize: 'inherit', fontWeight: 700, letterSpacing: '0.3px',
+                          textTransform: 'uppercase', border: '1.5px solid #4a90d9',
+                          borderRadius: 4, padding: '2px 6px', width: '100%', maxWidth: 340,
+                          outline: 'none', background: '#f0f7ff', fontFamily: 'inherit'
+                        }}
+                      />
                       <span
-                        style={{ fontSize: 16, cursor: 'default' }}
-                        title={`Titolo troppo lungo: ${displayCharsCount} caratteri (massimo consigliato: ~${maxCharsFor2Lines})`}
-                      >
-                        🔔
+                        onClick={saveTitleEdit}
+                        style={{ cursor: 'pointer', fontSize: 14, color: '#2ecc71', flexShrink: 0 }}
+                        title="Salva (Invio)"
+                      >✔</span>
+                      <span
+                        onClick={() => setShowTitleEditor(false)}
+                        style={{ cursor: 'pointer', fontSize: 14, color: '#e74c3c', flexShrink: 0 }}
+                        title="Annulla (Esc)"
+                      >✖</span>
+                      <span style={{ fontSize: 12, color: titleEditorValue.length > maxCharsFor2Lines ? '#e74c3c' : '#888', flexShrink: 0 }}>
+                        {titleEditorValue.length}/{maxCharsFor2Lines}
                       </span>
-                    )}
-                    <span
-                      onClick={openTitleEditor}
-                      style={{ cursor: 'pointer', fontSize: 14 }}
-                      title={`${isTitleTooLong ? 'Accorcia il titolo' : 'Modifica titolo'} — ${displayCharsCount} / ~${maxCharsFor2Lines} caratteri`}
-                    >
-                      ✏️
-                    </span>
-                  </div>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                      <span>{displayName}</span>
+                      {isTitleTooLong && (
+                        <span style={{ fontSize: 16, cursor: 'default' }} title="Titolo troppo lungo">🚨</span>
+                      )}
+                      <span
+                        onClick={openTitleEditor}
+                        style={{ cursor: 'pointer', fontSize: 14 }}
+                        title="Modifica titolo"
+                      >✏️</span>
+                      <span style={{
+                        fontSize: 12,
+                        color: isTitleTooLong ? '#e74c3c' : '#888',
+                        fontWeight: isTitleTooLong ? 700 : 400
+                      }}>
+                        {displayCharsCount}/{maxCharsFor2Lines}
+                      </span>
+                    </div>
+                  )}
                 </div>
                 {first.nameJp && <div className="portal-detail-title-jp">{first.nameJp}</div>}
                 <div className="portal-detail-attrs">
@@ -870,61 +903,6 @@ export default function PortalProduct() {
         </div>
       </div>
 
-      {/* Title Editor Modal */}
-      {showTitleEditor && (
-        <div style={{
-          position: 'fixed', inset: 0, zIndex: 10000,
-          background: 'rgba(0,0,0,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center'
-        }} onClick={() => setShowTitleEditor(false)}>
-          <div style={{
-            background: 'white', borderRadius: 'var(--portal-radius)', padding: 24, minWidth: 300,
-            boxShadow: '0 20px 40px rgba(0,0,0,0.15)', fontFamily: 'var(--portal-font)'
-          }} onClick={e => e.stopPropagation()}>
-            <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>
-              {lang === 'ja' ? 'タイトルを編集' : 'Modifica Titolo'}
-            </div>
-            <div style={{ fontSize: 12, color: 'var(--portal-ink-muted)', marginBottom: 12 }}>
-              {lang === 'ja'
-                ? `現在: ${titleLines}行、${displayCharsCount}文字で表示されています。2行以内に収まるよう短くしてください。`
-                : `Attualmente: ${titleLines} righe, ${displayCharsCount} caratteri su etichetta. Accorcia a 2 righe massimo (consigliati ~${maxCharsFor2Lines} caratteri).`
-              }
-            </div>
-            <input
-              type="text"
-              value={titleEditorValue}
-              onChange={e => setTitleEditorValue(e.target.value)}
-              style={{
-                width: '100%', padding: '8px 10px', fontSize: 13, boxSizing: 'border-box',
-                border: '1px solid var(--portal-border)', borderRadius: 6, marginBottom: 12,
-                fontFamily: 'var(--portal-font)'
-              }}
-              autoFocus
-            />
-            <div style={{ fontSize: 11, color: 'var(--portal-ink-muted)', marginBottom: 12 }}>
-              {lang === 'ja'
-                ? `新しいタイトルは${estimateTitleLines(titleEditorValue)}行、${titleEditorValue.length}文字になります`
-                : `Il nuovo titolo avrà ${estimateTitleLines(titleEditorValue)} righe, ${titleEditorValue.length} caratteri`
-              }
-            </div>
-            <div style={{ display: 'flex', gap: 6 }}>
-              <button onClick={saveTitleEdit} style={{
-                flex: 1, padding: '8px 12px', fontSize: 12, fontWeight: 600,
-                background: 'var(--portal-ink)', color: 'white', border: 'none',
-                borderRadius: 6, cursor: 'pointer', fontFamily: 'var(--portal-font)'
-              }}>
-                {lang === 'ja' ? '保存' : 'Salva'}
-              </button>
-              <button onClick={() => setShowTitleEditor(false)} style={{
-                flex: 1, padding: '8px 12px', fontSize: 12, fontWeight: 600,
-                background: 'var(--portal-paper)', color: 'var(--portal-ink-soft)', border: '1px solid var(--portal-border)',
-                borderRadius: 6, cursor: 'pointer', fontFamily: 'var(--portal-font)'
-              }}>
-                {lang === 'ja' ? 'キャンセル' : 'Annulla'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }
