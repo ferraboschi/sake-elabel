@@ -421,7 +421,7 @@ export const generateLabelPDF = async (rawLabel, options = {}) => {
     tmp.setFontSize(FS.body)
     if (label.countryOfOrigin) {
       const countryName = COUNTRY_NAMES[label.countryOfOrigin]?.[lang] || label.countryOfOrigin
-      const oLines = tmp.splitTextToSize(`${t.origin} ${countryName}`, TW)
+      const oLines = tmp.splitTextToSize(`${t.origin} ${countryName}`, CW)
       cy += TH.body
       if (oLines.length > 1) cy += (oLines.length - 1) * LS.body
     }
@@ -598,7 +598,7 @@ export const generateLabelPDF = async (rawLabel, options = {}) => {
     if (label.countryOfOrigin) {
       const countryName = COUNTRY_NAMES[label.countryOfOrigin]?.[lang] || label.countryOfOrigin
       const originText = `${t.origin} ${countryName}`
-      const oR = doc.splitTextToSize(originText, TW)
+      const oR = doc.splitTextToSize(originText, CW)
       drawText(oR, BL.body)
       y += TH.body
       if (oR.length > 1) y += (oR.length - 1) * LS.body
