@@ -304,7 +304,7 @@ function normalizeLabel(raw) {
       name: raw.importerName,
       address: raw.importerAddress || '',
     } : null),
-    countryOfOrigin: raw.countryOfOrigin || '',
+    countryOfOrigin: raw.countryOfOrigin || 'Japan',
     legalDescription: raw.legalDescription || '',
     ingredients: raw.ingredients || null,
     allergens: raw.allergens || null,
