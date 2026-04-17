@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Sake Company - Redirecting</title>
+    <script>
+      // GitHub Pages SPA redirect for custom domain (no repo prefix)
+      // Redirects /any/path?query to /?p=/any/path&q=query
+      var l = window.location;
+      var path = l.pathname;
+      var search = l.search;
+      var hash = l.hash;
+      // Encode path and query into a single query string
+      var redirect = '/?p=' + encodeURIComponent(path) +
+        (search ? '&q=' + encodeURIComponent(search.slice(1)) : '') +
+        hash;
+      l.replace(l.protocol + '//' + l.host + redirect);
+    </script>
+  </head>
+  <body>
+  </body>
+</html>
