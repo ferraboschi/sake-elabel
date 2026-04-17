@@ -1,0 +1,1 @@
+- [Tipologia + Finiture Feature](feature_tipologia_finiture.md) — Product_Type_Current override + Finiture tags compose the PDF category line (2026-04-18)

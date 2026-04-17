@@ -67,6 +67,10 @@ const ProductEditor = ({
       : (fallbackIngredients && !isCJK(fallbackIngredients) ? fallbackIngredients : '')
     setRe({
       category: detCat || product.category || '',
+      // productTypeCurrent: session override for Tipologia (empty = use original)
+      productTypeCurrent: '',
+      // finiture: finishing descriptors appended after tipologia (e.g. "Koshu Nama")
+      finiture: '',
       labelTitle: product.labelTitle || product.name || '',
       legalDescription: product.legalDescription || getDefaultLegalDescription(detCat, selectedLanguage),
       ingredients: existingIngredients || getDefaultIngredients(detCat, selectedLanguage),
@@ -290,10 +294,94 @@ const ProductEditor = ({
             )}
           </div>
 
-          {/* Categoria */}
+          {/* Categoria (rilevata automaticamente — sola lettura) */}
           <div>
-            <label style={fieldLabelStyle}>Categoria / カテゴリー</label>
-            <input type="text" value={re.category || ''} onChange={e => updateField('category', e.target.value)} style={inputStyle} />
+            <label style={fieldLabelStyle}>Categoria rilevata / カテゴリー</label>
+            <input
+              type="text"
+              value={re.category || ''}
+              readOnly
+              style={{ ...inputStyle, background: '#f6f8fa', color: '#8898aa', cursor: 'default' }}
+            />
+          </div>
+
+          {/* Tipologia (Product_Type_Current) — override sessione */}
+          <div>
+            <label style={fieldLabelStyle}>
+              Tipologia (override) / 種別
+              {re.productTypeCurrent && re.productTypeCurrent !== 'Nessuna' && (
+                <span style={{
+                  marginLeft: '8px', fontSize: '10px', fontWeight: 700,
+                  background: '#635bff', color: '#fff',
+                  padding: '1px 6px', borderRadius: '10px', verticalAlign: 'middle',
+                }}>MODIFICATO</span>
+              )}
+            </label>
+            <input
+              type="text"
+              value={re.productTypeCurrent || ''}
+              onChange={e => updateField('productTypeCurrent', e.target.value)}
+              placeholder={`${re.category || 'es: Tokubetsu Honjozo'} (lascia vuoto = usa originale)`}
+              style={inputStyle}
+            />
+            <div style={{ marginTop: '4px', fontSize: '11px', color: '#8898aa' }}>
+              Scrivi "Nessuna" per omettere la tipologia dal PDF. Lascia vuoto per usare la categoria rilevata.
+            </div>
+          </div>
+
+          {/* Finiture — finishing descriptors */}
+          <div style={{ gridColumn: '1 / -1' }}>
+            <label style={fieldLabelStyle}>Finiture / 仕上げ</label>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '8px' }}>
+              {['Koshu', 'Nama', 'Genshu', 'Nigori', 'Muroka', 'Shiboritate', 'Happoshu'].map(tag => {
+                const currentFiniture = (re.finiture || '').split(/\s+/).filter(Boolean)
+                const isActive = currentFiniture.includes(tag)
+                return (
+                  <button
+                    key={tag}
+                    type="button"
+                    onClick={() => {
+                      const next = isActive
+                        ? currentFiniture.filter(f => f !== tag)
+                        : [...currentFiniture, tag]
+                      updateField('finiture', next.join(' '))
+                    }}
+                    style={{
+                      padding: '4px 12px', fontSize: '12px', fontWeight: isActive ? 700 : 400,
+                      background: isActive ? '#635bff' : '#f0f0f5',
+                      color: isActive ? '#fff' : '#596780',
+                      border: isActive ? '1px solid #635bff' : '1px solid #d8dee4',
+                      borderRadius: '20px', cursor: 'pointer', transition: 'all 0.1s',
+                    }}
+                  >
+                    {tag}
+                  </button>
+                )
+              })}
+            </div>
+            <input
+              type="text"
+              value={re.finiture || ''}
+              onChange={e => updateField('finiture', e.target.value)}
+              placeholder="es: Koshu Nama  (spazi tra tag, ordine libero)"
+              style={inputStyle}
+            />
+            {(re.productTypeCurrent || re.category || re.finiture) && (
+              <div style={{
+                marginTop: '6px', padding: '6px 10px',
+                background: '#f0f5ff', borderRadius: '6px',
+                fontSize: '12px', color: '#3730a3', fontWeight: 500,
+              }}>
+                Anteprima PDF: <em>
+                  {[
+                    re.productTypeCurrent === 'Nessuna'
+                      ? ''
+                      : (re.productTypeCurrent || re.category || ''),
+                    re.finiture || '',
+                  ].filter(Boolean).join(' ') || '(vuoto)'}
+                </em>
+              </div>
+            )}
           </div>
 
           {/* Denominazione legale */}

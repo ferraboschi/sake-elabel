@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
-import { fetchProducts, updateProduct, isAirtableConfigured } from '../../services/airtable'
+import { fetchProducts, updateProduct, isAirtableConfigured, composeProductTypeString, parseProductTypeString } from '../../services/airtable'
 import { translateIngredients as autoTranslate, autoFillIngredients } from '../../services/ingredientTranslator'
 import { useGenerateLabel } from '../../hooks/useGenerateLabel'
 import { downloadLabelPDF, downloadBoxLabelPDF } from '../../services/labelPrinter'
@@ -99,6 +99,21 @@ const NUTRITION_FIELDS = [
 const normalizeFullWidth = (s) => s ? s.replace(/[\uff01-\uff5e]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xfee0)).replace(/\u3000/g, ' ') : s
 const normalizeNumeric = (s) => s ? normalizeFullWidth(s).replace(/[^0-9.]/g, '') : s
 
+// ── Sake product types (Tipologia) ──
+const SAKE_TYPE_OPTIONS = [
+  '', // empty = no type selected
+  'Daiginjo', 'Ginjo', 'Junmai', 'Junmai Daiginjo', 'Junmai Ginjo',
+  'Junmai Genshu', 'Honjozo', 'Tokubetsu Honjozo', 'Tokubetsu Junmai',
+  'Futsushu', 'Sparkling', 'Ai frutti', 'Shochu', 'Gin', 'Whisky',
+  'Awamori', 'Rum', 'Vodka', 'Birra', 'Vino',
+]
+
+// ── Sake finishes (Finiture) — toggleable tags ──
+const SAKE_FINISH_OPTIONS = [
+  'Koshu', 'Nama', 'Nigori', 'Genshu', 'Kimoto', 'Yamahai',
+  'Muroka', 'Sparkling', 'Tokubetsu',
+]
+
 export default function PortalProduct() {
   const { slug } = useParams()
   const navigate = useNavigate()
@@ -120,6 +135,9 @@ export default function PortalProduct() {
   // Title editor modal
   const [showTitleEditor, setShowTitleEditor] = useState(false)
   const [titleEditorValue, setTitleEditorValue] = useState('')
+
+  // Product type / finishes editor
+  const [showTypeEditor, setShowTypeEditor] = useState(false)
 
   // Print settings
   const [printLang, setPrintLang] = useState('it')
@@ -200,6 +218,27 @@ export default function PortalProduct() {
             knownRecordIds.current = siblings.map(s => s._recordId)
 
             const f = siblings[0]
+
+            // Parse product type / finishes from Airtable or from the category field
+            const savedTypeCurrent = f.productTypeCurrent || ''
+            const savedFinishes = f.productFinishes || ''
+            const typeOriginal = f.typeOriginal || `(${f.category || ''})`
+            const isTypeModified = f.typeModifiedFlag || false
+
+            // If there's a saved modified type, use it; otherwise derive from category
+            let initProductType = ''
+            let initFinishes = []
+            if (savedTypeCurrent) {
+              // User previously edited: use saved values
+              initProductType = savedTypeCurrent
+              initFinishes = savedFinishes ? savedFinishes.split(/\s+/).filter(Boolean) : []
+            } else {
+              // First time: derive from the original category field
+              const parsed = parseProductTypeString(f.category || '', SAKE_TYPE_OPTIONS.filter(Boolean))
+              initProductType = parsed.productType
+              initFinishes = parsed.finishes
+            }
+
             setEd({
               editedName: '',
               alcoholPct: f.alcoholPct ?? '',
@@ -212,6 +251,11 @@ export default function PortalProduct() {
               sugarsG: f.nutrition?.sugars ?? '',
               proteinG: f.nutrition?.protein ?? '',
               saltG: f.nutrition?.salt ?? '',
+              // Product type / finishes
+              productTypeModified: initProductType,
+              finishesModified: initFinishes,
+              productTypeOriginal: typeOriginal,
+              typeModifiedFlag: isTypeModified,
             })
             const ean = {}, ebox = {}, bpb = {}, lot = {}
             for (const s of siblings) {
@@ -267,6 +311,21 @@ export default function PortalProduct() {
         payload.productName = d.editedName.trim()
       } else {
         console.log('[doSave] Not saving title (editedName is empty or falsy)')
+      }
+
+      // Save product type / finishes
+      if (d.productTypeModified !== undefined) {
+        const combinedType = composeProductTypeString(d.productTypeModified, d.finishesModified || [])
+        payload.productTypeCurrent = d.productTypeModified || ''
+        payload.productFinishes = (d.finishesModified || []).join(' ')
+        // Compare with original to set modified flag
+        const originalClean = (d.productTypeOriginal || '').replace(/^\(|\)$/g, '').trim()
+        const isModified = combinedType !== originalClean
+        payload.typeModifiedFlag = isModified
+        if (!d.productTypeOriginal && first.category) {
+          payload.typeOriginal = `(${first.category})`
+        }
+        console.log('[doSave] Type:', combinedType, 'Original:', originalClean, 'Modified:', isModified)
       }
 
       console.log('[doSave] Payload:', payload)
@@ -375,6 +434,18 @@ export default function PortalProduct() {
         const alc = parseFloat(normalizeNumeric(String(ed.alcoholPct)))
         if (!isNaN(alc) && alc >= 0) payload.alcoholPct = alc
 
+        // Include product type / finishes in title save payload
+        if (ed.productTypeModified !== undefined) {
+          const ct = composeProductTypeString(ed.productTypeModified, ed.finishesModified || [])
+          payload.productTypeCurrent = ed.productTypeModified || ''
+          payload.productFinishes = (ed.finishesModified || []).join(' ')
+          const oc = (ed.productTypeOriginal || '').replace(/^\(|\)$/g, '').trim()
+          payload.typeModifiedFlag = ct !== oc
+          if (!ed.productTypeOriginal && first.category) {
+            payload.typeOriginal = `(${first.category})`
+          }
+        }
+
         // Save for all items (siblings = different sizes of same product)
         for (const item of items) {
           const ip = { ...payload }
@@ -412,6 +483,28 @@ export default function PortalProduct() {
       setShowTitleEditor(false)
     }
   }
+
+  // Product type / finishes editing helpers
+  const updateProductType = (newType) => {
+    setEd(prev => ({ ...prev, productTypeModified: newType }))
+    scheduleAutosave()
+  }
+
+  const toggleFinish = (finish) => {
+    setEd(prev => {
+      const current = prev.finishesModified || []
+      const next = current.includes(finish)
+        ? current.filter(f => f !== finish)
+        : [...current, finish]
+      return { ...prev, finishesModified: next }
+    })
+    scheduleAutosave()
+  }
+
+  // Compute combined type string and check if modified
+  const combinedTypeDisplay = composeProductTypeString(ed.productTypeModified || '', ed.finishesModified || [])
+  const originalTypeClean = (ed.productTypeOriginal || '').replace(/^\(|\)$/g, '').trim()
+  const isTypeModified = combinedTypeDisplay !== originalTypeClean && combinedTypeDisplay !== ''
 
   // Importers
   const importers = getImportersForRegion(printRegion)
@@ -466,7 +559,8 @@ export default function PortalProduct() {
     try {
       const regionInfo = REGION_CODE_LABELS[printRegion]
       const imp = selectedImporter
-      const cat = detectDetailedCategory(item.name, item.category || '', '')
+      // Use modified type if available, otherwise detect from category
+      const cat = combinedTypeDisplay || detectDetailedCategory(item.name, item.category || '', '')
       const legalDesc = item.legalDescription || getDefaultLegalDescription(cat, printLang)
 
       // Generate QR code
@@ -584,7 +678,8 @@ export default function PortalProduct() {
     )
   }
 
-  const detailedCategory = detectDetailedCategory(first.name, first.category || '', '')
+  // Use modified type if available, otherwise fallback to detected category
+  const detailedCategory = combinedTypeDisplay || detectDetailedCategory(first.name, first.category || '', '')
   const legalDesc = first.legalDescription || getDefaultLegalDescription(detailedCategory, printLang)
 
   return (
@@ -681,7 +776,23 @@ export default function PortalProduct() {
                 {first.nameJp && <div className="portal-detail-title-jp">{first.nameJp}</div>}
                 <div className="portal-detail-attrs">
                   <span>🏭 {first.wineryJp || first.winery}</span>
-                  {first.category && <span>🍶 {first.category}</span>}
+                  {(combinedTypeDisplay || first.category) && (
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                      🍶 {combinedTypeDisplay || first.category}
+                      {isTypeModified && (
+                        <span style={{
+                          fontSize: 9, fontWeight: 700, color: '#e67e22',
+                          background: '#fef3e2', padding: '1px 5px', borderRadius: 3,
+                          border: '1px solid #f0c27a', lineHeight: 1.3,
+                        }}>MODIFICATO</span>
+                      )}
+                      <span
+                        onClick={() => setShowTypeEditor(v => !v)}
+                        style={{ cursor: 'pointer', fontSize: 13 }}
+                        title={jp ? 'Tipologia/Finiture編集' : 'Modifica Tipologia/Finiture'}
+                      >✏️</span>
+                    </span>
+                  )}
                   {first.countryOfOrigin && <span>🇯🇵 {first.countryOfOrigin}</span>}
                 </div>
                 <div className="portal-detail-sizes">
@@ -692,6 +803,93 @@ export default function PortalProduct() {
               </div>
             </div>
           </div>
+
+          {/* Product Type / Finishes Editor */}
+          {showTypeEditor && (
+            <div className="portal-card" style={{ borderLeft: '3px solid #4a90d9' }}>
+              <div className="portal-card-head">
+                <span className="portal-card-title">🍶 {jp ? 'Tipologia / Finiture' : 'Tipologia / Finiture'}</span>
+                <button
+                  onClick={() => setShowTypeEditor(false)}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, color: 'var(--portal-ink-muted)', padding: '2px 4px' }}
+                  title={jp ? '閉じる' : 'Chiudi'}
+                >✖</button>
+              </div>
+
+              {/* Tipologia (Product Type) */}
+              <div style={{ marginBottom: 10 }}>
+                <div style={{ fontSize: 11, color: 'var(--portal-ink-muted)', marginBottom: 4, fontWeight: 600 }}>
+                  {jp ? 'Tipologia (種類)' : 'Tipologia'}
+                </div>
+                <select
+                  className="portal-select"
+                  value={ed.productTypeModified || ''}
+                  onChange={e => updateProductType(e.target.value)}
+                  style={{ width: '100%' }}
+                >
+                  <option value="">— {jp ? '選択なし' : 'Nessuna'} —</option>
+                  {SAKE_TYPE_OPTIONS.filter(Boolean).map(t => (
+                    <option key={t} value={t}>{t}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Finiture (Finishes) — toggle chips */}
+              <div style={{ marginBottom: 10 }}>
+                <div style={{ fontSize: 11, color: 'var(--portal-ink-muted)', marginBottom: 4, fontWeight: 600 }}>
+                  {jp ? 'Finiture (仕上げ)' : 'Finiture'}
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                  {SAKE_FINISH_OPTIONS.map(finish => {
+                    const isSelected = (ed.finishesModified || []).includes(finish)
+                    return (
+                      <button
+                        key={finish}
+                        onClick={() => toggleFinish(finish)}
+                        style={{
+                          padding: '3px 10px', fontSize: 11, fontWeight: isSelected ? 700 : 400,
+                          borderRadius: 12, cursor: 'pointer', transition: 'all 0.12s',
+                          fontFamily: 'var(--portal-font)',
+                          border: isSelected ? '1.5px solid #4a90d9' : '1px solid var(--portal-border)',
+                          background: isSelected ? '#e8f2fc' : 'white',
+                          color: isSelected ? '#2a6cb8' : 'var(--portal-ink-soft)',
+                        }}
+                      >
+                        {finish}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* Combined result display */}
+              <div style={{
+                background: 'var(--portal-paper)', borderRadius: 'var(--portal-radius-sm)',
+                padding: '6px 10px', fontSize: 11, lineHeight: 1.5,
+              }}>
+                <div>
+                  <span style={{ color: 'var(--portal-ink-muted)' }}>{jp ? '結果' : 'Risultato'}: </span>
+                  <strong>{combinedTypeDisplay || (jp ? '(なし)' : '(vuoto)')}</strong>
+                </div>
+                <div style={{ fontSize: 10, color: 'var(--portal-ink-muted)' }}>
+                  <span>{jp ? 'オリジナル' : 'Originale'}: </span>
+                  <span>{ed.productTypeOriginal || `(${first.category || ''})`}</span>
+                </div>
+                {isTypeModified && (
+                  <div style={{
+                    fontSize: 10, fontWeight: 600, color: '#e67e22',
+                    marginTop: 3, display: 'inline-flex', alignItems: 'center', gap: 4,
+                  }}>
+                    MODIFICATO
+                  </div>
+                )}
+              </div>
+
+              <div className="portal-note" style={{ marginTop: 6 }}>
+                {jp ? '保存は自動 (2秒後)' : 'Salvataggio automatico (2 sec)'}
+              </div>
+            </div>
+          )}
 
           {/* Ingredients + Alcohol */}
           <div className="portal-card">

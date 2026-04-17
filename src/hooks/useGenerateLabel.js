@@ -39,9 +39,39 @@ export function useGenerateLabel() {
         const ingOverride = re.ingredients ? { ...product.ingredients, [selectedLanguage]: re.ingredients } : product.ingredients
         const algOverride = re.allergens !== undefined ? { ...product.allergens, [selectedLanguage]: re.allergens } : product.allergens
 
+        // ── Tipologia + Finiture ──────────────────────────────────────────────
+        // Product_Type_Current: session override of the base product type.
+        // Empty   → use detailedCategory (auto-detected)
+        // "Nessuna" → omit tipologia from PDF (show only finiture if present)
+        // Any text → use as tipologia (renders MODIFIED badge in PDF)
+        const rawTypeCurrent = (re.productTypeCurrent || '').trim()
+        const isTypeOverridden = rawTypeCurrent !== '' && rawTypeCurrent !== detailedCategory
+
+        // Resolve effective base type for PDF
+        let effectiveBaseType
+        if (rawTypeCurrent === 'Nessuna') {
+          effectiveBaseType = ''               // omit entirely
+        } else if (rawTypeCurrent !== '') {
+          effectiveBaseType = rawTypeCurrent   // use override
+        } else {
+          effectiveBaseType = detailedCategory || product.category || ''
+        }
+
+        // Finiture: space-separated finishing words (Koshu, Nama, Genshu …)
+        const finitureTokens = (re.finiture || '').trim().split(/\s+/).filter(Boolean)
+        const finitureStr = finitureTokens.join(' ')
+
+        // Composed category line for PDF: "Tokubetsu Honjozo Koshu Nama"
+        const composedCategory = [effectiveBaseType, finitureStr].filter(Boolean).join(' ')
+
         const label = {
           ...product,
-          category: detailedCategory || product.category,
+          category: composedCategory || detailedCategory || product.category,
+          // Pass metadata so labelPrinter can render the MODIFIED badge
+          productTypeCurrent: rawTypeCurrent,
+          productTypeOriginal: detailedCategory || product.category || '',
+          isTypeModified: isTypeOverridden,
+          finiture: finitureStr,
           legalDescription: legalDesc,
           alcoholPct: re.alcoholPct ? parseFloat(re.alcoholPct) : product.alcoholPct,
           volumeMl: re.volumeMl ? parseInt(re.volumeMl) : product.volumeMl,

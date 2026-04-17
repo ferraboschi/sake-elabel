@@ -315,6 +315,11 @@ function normalizeLabel(raw) {
     allergens: raw.allergens || null,
     bottlesPerBox: raw.bottlesPerBox || null,
     lotNumber: raw.lotNumber || '',
+    // Tipologia + Finiture support
+    // category is already the composed value ("Tokubetsu Honjozo Koshu Nama")
+    // isTypeModified drives the MODIFIED badge in the category line
+    isTypeModified: raw.isTypeModified || false,
+    finiture: raw.finiture || '',
   }
 }
 
@@ -533,7 +538,9 @@ export const generateLabelPDF = async (rawLabel, options = {}) => {
   drawText(nameR, titleStyle.bl)
   y += nameR.length * titleStyle.ls
 
-  // ── CATEGORY ──
+  // ── CATEGORY (composed tipologia + finiture) ──
+  // category already contains: "Tokubetsu Honjozo Koshu Nama" (composed in useGenerateLabel)
+  // isTypeModified → small asterisk + "MOD." tag printed after the category text
   if (label.category) {
     doc.setTextColor(100)
     setFont(FS.category, 'italic')
@@ -542,6 +549,20 @@ export const generateLabelPDF = async (rawLabel, options = {}) => {
       catLine += ` · ${label.bottlesPerBox} ${label.bottlesPerBox === 1 ? 'bottiglia' : 'bottiglie'}`
     }
     drawText(catLine, BL.body)
+
+    // MODIFIED badge: small asterisk + "MOD" in accent color, right after the category text
+    if (label.isTypeModified) {
+      const catW = doc.getTextWidth(catLine)
+      const badgeX = OX + M + catW + 1.0  // 1mm gap after category text
+      const badgeY = OY + y + BL.body
+      doc.setFontSize(4.5)
+      doc.setFont('helvetica', 'bold')
+      doc.setTextColor(99, 91, 255)  // accent purple — matches the admin UI brand colour
+      doc.text('MOD.', badgeX, badgeY)
+      doc.setTextColor(100)
+      setFont(FS.category, 'italic')  // restore for any following draws
+    }
+
     y += TH.body
     doc.setTextColor(0)
   }

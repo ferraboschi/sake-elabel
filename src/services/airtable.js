@@ -76,6 +76,12 @@ const FIELDS = {
   // === Legal description (custom denomination for label) ===
   legalDescription:   { id: 'fldwiR0TCKQJWH3x1', name: 'Legal_Description' },
 
+  // === Product Type / Finishes (modified by user) ===
+  productTypeCurrent: { id: 'fldPTC_placeholder',  name: 'Product_Type_Current' },
+  productFinishes:    { id: 'fldPF_placeholder',   name: 'Product_Finishes' },
+  typeModifiedFlag:   { id: 'fldTMF_placeholder',  name: 'Type_Modified_Flag' },
+  typeOriginal:       { id: 'fldTO_placeholder',    name: 'Type_Original' },
+
   // === E-Label status ===
   elabelStatus:       { id: 'fld8JHbfh7z3awZ2x', name: 'ELabel_Status' },
   elabelUrl:          { id: 'fldbumiHE3Ii2mfiL', name: 'ELabel_URL' },
@@ -448,12 +454,78 @@ function normalizeRecord(record) {
     countryOfOrigin: get('countryOfOrigin') || '',
     legalDescription: get('legalDescription') || '',
 
+    // Product Type / Finishes (user modifications)
+    productTypeCurrent: get('productTypeCurrent') || '',
+    productFinishes: get('productFinishes') || '',
+    typeModifiedFlag: !!get('typeModifiedFlag'),
+    typeOriginal: get('typeOriginal') || '',
+
     // E-Label status
     elabelStatus: getSelect('elabelStatus') || '',
     elabelUrl: get('elabelUrl') || '',
     elabelQrGenerated: get('elabelQrGenerated') || false,
     elabelLastUpdated: get('elabelLastUpdated') || null,
   }
+}
+
+/**
+ * Fetch all products that have been modified (Type_Modified_Flag = true).
+ * Returns a filtered array of normalized product objects.
+ */
+export const getModifiedProducts = async () => {
+  if (!isAirtableConfigured()) return []
+
+  const all = await fetchProducts()
+  if (!all) return []
+
+  return all.filter(p => p.typeModifiedFlag === true)
+}
+
+/**
+ * Compose a combined type + finishes string for display/save.
+ * Format: "Tokubetsu Honjozo Koshu Nama" (space-separated).
+ * If only finishes: "Koshu"
+ * If only type: "Junmai"
+ */
+export const composeProductTypeString = (productType, finishes = []) => {
+  const parts = []
+  if (productType && productType.trim()) parts.push(productType.trim())
+  for (const f of finishes) {
+    if (f && f.trim()) parts.push(f.trim())
+  }
+  return parts.join(' ')
+}
+
+/**
+ * Parse a combined type+finishes string back into { productType, finishes }.
+ * Uses the known SAKE_TYPES list to identify the base type;
+ * anything left over is treated as a finish.
+ */
+export const parseProductTypeString = (combined, knownTypes = []) => {
+  if (!combined || !combined.trim()) return { productType: '', finishes: [] }
+
+  const ALL_SAKE_TYPES = knownTypes.length ? knownTypes : [
+    'Daiginjo', 'Ginjo', 'Junmai', 'Junmai Daiginjo', 'Junmai Ginjo',
+    'Junmai Genshu', 'Honjozo', 'Tokubetsu Honjozo', 'Tokubetsu Junmai',
+    'Futsushu', 'Ai frutti', 'Fruit Sake', 'Shochu', 'Gin', 'Whisky',
+    'Awamori', 'Rum', 'Vodka', 'Sparkling', 'Birra', 'Vino',
+  ]
+
+  const str = combined.trim()
+
+  // Try matching the longest known type first (multi-word types like "Tokubetsu Honjozo")
+  const sortedTypes = [...ALL_SAKE_TYPES].sort((a, b) => b.length - a.length)
+  for (const t of sortedTypes) {
+    if (str.startsWith(t)) {
+      const rest = str.slice(t.length).trim()
+      const finishes = rest ? rest.split(/\s+/).filter(Boolean) : []
+      return { productType: t, finishes }
+    }
+  }
+
+  // No known type matched — treat everything as finishes
+  const parts = str.split(/\s+/).filter(Boolean)
+  return { productType: '', finishes: parts }
 }
 
 export default {
@@ -463,4 +535,7 @@ export default {
   updateProduct,
   batchUpdateProducts,
   composePackagingMaterials,
+  getModifiedProducts,
+  composeProductTypeString,
+  parseProductTypeString,
 }
