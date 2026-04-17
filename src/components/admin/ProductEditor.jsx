@@ -260,8 +260,32 @@ const ProductEditor = ({
               style={inputStyle}
             />
             {titleLines > 2 && (
-              <div style={{ fontSize: '12px', color: '#e65100', marginTop: '4px' }}>
-                Il titolo occupa {titleLines} righe — considerare abbreviazione
+              <div style={{
+                marginTop: '8px', padding: '12px', background: '#fff3e0', border: '1px solid #ffb74d',
+                borderRadius: '6px', display: 'flex', alignItems: 'center', gap: '10px',
+              }}>
+                <span style={{ fontSize: '18px' }}>⚠️</span>
+                <div style={{ flex: 1, fontSize: '13px', color: '#e65100' }}>
+                  <div style={{ fontWeight: 600, marginBottom: '4px' }}>
+                    Titolo troppo lungo ({titleLines} righe)
+                  </div>
+                  <div style={{ fontSize: '12px', opacity: 0.9 }}>
+                    Riduci di almeno {Math.max(1, Math.ceil((re.labelTitle?.length || 0) * 0.25))} caratteri per stare in 2 righe
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    const field = document.querySelector('input[value="' + (re.labelTitle || '').replace(/"/g, '\\"') + '"]')
+                    field?.focus()
+                  }}
+                  style={{
+                    padding: '6px 12px', background: '#ff9800', color: '#fff', border: 'none',
+                    borderRadius: '4px', fontSize: '12px', fontWeight: 600, cursor: 'pointer',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  ✏️ Modifica
+                </button>
               </div>
             )}
           </div>
