@@ -479,15 +479,13 @@ export default function PortalProduct() {
               <div style={{ flex: 1 }}>
                 <div className="portal-detail-title">
                   {displayName}
-                  {titleLines > 2 && (
-                    <span
-                      onClick={openTitleEditor}
-                      style={{ marginLeft: 8, cursor: 'pointer', fontSize: 14 }}
-                      title={`Titolo troppo lungo (${titleLines} righe su etichetta) — clicca per accorciare`}
-                    >
-                      ✏️🔴
-                    </span>
-                  )}
+                  <span
+                    onClick={openTitleEditor}
+                    style={{ marginLeft: 8, cursor: 'pointer', fontSize: 14 }}
+                    title={`Titolo troppo lungo (${titleLines} righe su etichetta) — clicca per accorciare`}
+                  >
+                    ✏️🔴
+                  </span>
                 </div>
                 {first.nameJp && <div className="portal-detail-title-jp">{first.nameJp}</div>}
                 <div className="portal-detail-attrs">
