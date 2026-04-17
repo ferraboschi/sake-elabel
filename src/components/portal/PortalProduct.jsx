@@ -383,6 +383,13 @@ export default function PortalProduct() {
     setSaving(false)
   }
 
+  // Title validation (needed before canPrint check below)
+  const displayName = ed.editedName || first.name
+  const titleLines = estimateTitleLines(displayName)
+  const isTitleTooLong = titleLines > 2
+  const maxCharsFor2Lines = getMaxCharsFor2Lines(2)
+  const displayCharsCount = displayName.length
+
   // Completeness check
   const hasIngredients = !!(ed.ingredientsIt || '').trim()
   const hasNutrition = !!(ed.energyKj || ed.energyKcal)
@@ -440,13 +447,6 @@ export default function PortalProduct() {
 
   const detailedCategory = detectDetailedCategory(first.name, first.category || '', '')
   const legalDesc = first.legalDescription || getDefaultLegalDescription(detailedCategory, printLang)
-
-  // Calculate title lines for validation indicator
-  const displayName = ed.editedName || first.name
-  const titleLines = estimateTitleLines(displayName)
-  const isTitleTooLong = titleLines > 2
-  const maxCharsFor2Lines = getMaxCharsFor2Lines(2)
-  const displayCharsCount = displayName.length
 
   return (
     <div className="portal">
