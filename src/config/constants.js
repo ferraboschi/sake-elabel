@@ -42,3 +42,22 @@ export function estimateTitleLines(title) {
   }
   return lines
 }
+
+/**
+ * Get the maximum number of characters that fit in N lines on the PDF label.
+ * Uses conservative estimates based on average character width.
+ */
+export function getMaxCharsFor2Lines(n = 2) {
+  // Average character width for uppercase Latin (typical product names): ~2.0mm
+  // Available width for title on PDF: 36.9mm (from estimateTitleLines maxWidthMm)
+  // Conservative estimate: assume average char width of 2.0mm
+  const avgCharWidthMm = 2.0
+  const maxWidthMm = 36.9
+  const spaceWidthMm = 1.1
+
+  // Characters per line: floor(maxWidth / avgCharWidth)
+  const charsPerLine = Math.floor(maxWidthMm / avgCharWidthMm)
+
+  // Return total for n lines
+  return charsPerLine * n  // Returns ~36 for 2 lines
+}

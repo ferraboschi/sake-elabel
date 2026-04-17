@@ -5,7 +5,7 @@ import { translateIngredients as autoTranslate, autoFillIngredients } from '../.
 import { useGenerateLabel } from '../../hooks/useGenerateLabel'
 import { downloadLabelPDF, downloadBoxLabelPDF } from '../../services/labelPrinter'
 import { isValidEAN13, detectBarcodeFormat } from '../../services/barcodeGenerator'
-import { estimateTitleLines } from '../../config/constants'
+import { estimateTitleLines, getMaxCharsFor2Lines } from '../../config/constants'
 import QRCode from 'qrcode'
 
 /**
@@ -391,7 +391,7 @@ export default function PortalProduct() {
   const hasEan = !!(currentItem && eanData[currentItem?._recordId])
   const hasEanBox = !!(currentItem && eanBoxData[currentItem?._recordId])
   // Print requires only alcohol + ingredients. EAN/nutrition are optional (barcode just won't appear)
-  const canPrint = hasIngredients && hasAlcohol
+  const canPrint = hasIngredients && hasAlcohol && !isTitleTooLong
 
   // Photo
   const photo = (() => {
@@ -444,6 +444,9 @@ export default function PortalProduct() {
   // Calculate title lines for validation indicator
   const displayName = ed.editedName || first.name
   const titleLines = estimateTitleLines(displayName)
+  const isTitleTooLong = titleLines > 2
+  const maxCharsFor2Lines = getMaxCharsFor2Lines(2)
+  const displayCharsCount = displayName.length
 
   return (
     <div className="portal">
@@ -479,13 +482,23 @@ export default function PortalProduct() {
               <div style={{ flex: 1 }}>
                 <div className="portal-detail-title">
                   {displayName}
-                  <span
-                    onClick={openTitleEditor}
-                    style={{ marginLeft: 8, cursor: 'pointer', fontSize: 14 }}
-                    title={`Titolo troppo lungo (${titleLines} righe su etichetta) — clicca per accorciare`}
-                  >
-                    ✏️🔴
-                  </span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 8 }}>
+                    {isTitleTooLong && (
+                      <span
+                        style={{ fontSize: 16, cursor: 'default' }}
+                        title={`Titolo troppo lungo: ${displayCharsCount} caratteri (massimo consigliato: ~${maxCharsFor2Lines})`}
+                      >
+                        🔔
+                      </span>
+                    )}
+                    <span
+                      onClick={openTitleEditor}
+                      style={{ cursor: 'pointer', fontSize: 14 }}
+                      title={`${isTitleTooLong ? 'Accorcia il titolo' : 'Modifica titolo'} — ${displayCharsCount} / ~${maxCharsFor2Lines} caratteri`}
+                    >
+                      ✏️
+                    </span>
+                  </div>
                 </div>
                 {first.nameJp && <div className="portal-detail-title-jp">{first.nameJp}</div>}
                 <div className="portal-detail-attrs">
@@ -757,6 +770,7 @@ export default function PortalProduct() {
                   ⚠ {jp ? '印刷不可 — 必須項目が不足' : 'Stampa disabilitata — mancano'}:
                   {!hasIngredients && ` ${jp ? '原材料' : 'Ingredienti'}`}
                   {!hasAlcohol && ` ${jp ? 'アルコール' : 'Alcool'}`}
+                  {isTitleTooLong && ` ${jp ? '商品名が長すぎます' : 'Nome prodotto troppo lungo'}`}
                 </div>
               </div>
             )}
@@ -871,8 +885,8 @@ export default function PortalProduct() {
             </div>
             <div style={{ fontSize: 12, color: 'var(--portal-ink-muted)', marginBottom: 12 }}>
               {lang === 'ja'
-                ? `現在: ${titleLines}行で表示されています。2行以内に収まるよう短くしてください。`
-                : `Attualmente: ${titleLines} righe su etichetta. Accorcia a 2 righe massimo.`
+                ? `現在: ${titleLines}行、${displayCharsCount}文字で表示されています。2行以内に収まるよう短くしてください。`
+                : `Attualmente: ${titleLines} righe, ${displayCharsCount} caratteri su etichetta. Accorcia a 2 righe massimo (consigliati ~${maxCharsFor2Lines} caratteri).`
               }
             </div>
             <input
@@ -888,8 +902,8 @@ export default function PortalProduct() {
             />
             <div style={{ fontSize: 11, color: 'var(--portal-ink-muted)', marginBottom: 12 }}>
               {lang === 'ja'
-                ? `新しいタイトルは${estimateTitleLines(titleEditorValue)}行になります`
-                : `Il nuovo titolo avrà ${estimateTitleLines(titleEditorValue)} righe`
+                ? `新しいタイトルは${estimateTitleLines(titleEditorValue)}行、${titleEditorValue.length}文字になります`
+                : `Il nuovo titolo avrà ${estimateTitleLines(titleEditorValue)} righe, ${titleEditorValue.length} caratteri`
               }
             </div>
             <div style={{ display: 'flex', gap: 6 }}>
