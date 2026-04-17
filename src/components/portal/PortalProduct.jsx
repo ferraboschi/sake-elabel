@@ -5,6 +5,7 @@ import { translateIngredients as autoTranslate, autoFillIngredients } from '../.
 import { useGenerateLabel } from '../../hooks/useGenerateLabel'
 import { downloadLabelPDF, downloadBoxLabelPDF } from '../../services/labelPrinter'
 import { isValidEAN13, detectBarcodeFormat } from '../../services/barcodeGenerator'
+import { estimateTitleLines } from '../../config/constants'
 import QRCode from 'qrcode'
 
 /**
@@ -115,6 +116,10 @@ export default function PortalProduct() {
   const [eanBoxData, setEanBoxData] = useState({})
   const [bpbData, setBpbData] = useState({})
 
+  // Title editor modal
+  const [showTitleEditor, setShowTitleEditor] = useState(false)
+  const [titleEditorValue, setTitleEditorValue] = useState('')
+
   // Print settings
   const [printLang, setPrintLang] = useState('it')
   const [printRegion, setPrintRegion] = useState('ITA')
@@ -150,6 +155,7 @@ export default function PortalProduct() {
             setItems(siblings)
             const f = siblings[0]
             setEd({
+              editedName: '',
               alcoholPct: f.alcoholPct ?? '',
               ingredientsIt: f.ingredients?.it || '',
               energyKj: f.nutrition?.energy_kj ?? '',
@@ -198,6 +204,10 @@ export default function PortalProduct() {
       }
       const alc = parseFloat(normalizeNumeric(String(d.alcoholPct)))
       if (!isNaN(alc) && alc >= 0) payload.alcoholPct = alc
+      // Save edited title if provided
+      if (d.editedName && d.editedName.trim()) {
+        payload.name = d.editedName.trim()
+      }
 
       for (const item of items) {
         const ip = { ...payload }
@@ -249,6 +259,21 @@ export default function PortalProduct() {
   const updateEan = (id, v) => { setEanData(p => ({ ...p, [id]: v })); scheduleAutosave() }
   const updateEanBox = (id, v) => { setEanBoxData(p => ({ ...p, [id]: v })); scheduleAutosave() }
   const updateBpb = (id, v) => { setBpbData(p => ({ ...p, [id]: v })); scheduleAutosave() }
+
+  // Title editor functions
+  const openTitleEditor = () => {
+    const currentName = ed.editedName || first.name
+    setTitleEditorValue(currentName)
+    setShowTitleEditor(true)
+  }
+
+  const saveTitleEdit = () => {
+    if (titleEditorValue.trim()) {
+      setEd(prev => ({ ...prev, editedName: titleEditorValue.trim() }))
+      scheduleAutosave()
+    }
+    setShowTitleEditor(false)
+  }
 
   // Importers
   const importers = getImportersForRegion(printRegion)
@@ -416,6 +441,10 @@ export default function PortalProduct() {
   const detailedCategory = detectDetailedCategory(first.name, first.category || '', '')
   const legalDesc = first.legalDescription || getDefaultLegalDescription(detailedCategory, printLang)
 
+  // Calculate title lines for validation indicator
+  const displayName = ed.editedName || first.name
+  const titleLines = estimateTitleLines(displayName)
+
   return (
     <div className="portal">
       {/* Sticky Top Bar */}
@@ -448,7 +477,18 @@ export default function PortalProduct() {
                 {photo ? <img src={photo} alt={first.name} /> : '🍶'}
               </div>
               <div style={{ flex: 1 }}>
-                <div className="portal-detail-title">{first.name}</div>
+                <div className="portal-detail-title">
+                  {displayName}
+                  {titleLines > 2 && (
+                    <span
+                      onClick={openTitleEditor}
+                      style={{ marginLeft: 8, cursor: 'pointer', fontSize: 14 }}
+                      title={`Titolo troppo lungo (${titleLines} righe su etichetta) — clicca per accorciare`}
+                    >
+                      ✏️🔴
+                    </span>
+                  )}
+                </div>
                 {first.nameJp && <div className="portal-detail-title-jp">{first.nameJp}</div>}
                 <div className="portal-detail-attrs">
                   <span>🏭 {first.wineryJp || first.winery}</span>
@@ -817,6 +857,62 @@ export default function PortalProduct() {
           })()}
         </div>
       </div>
+
+      {/* Title Editor Modal */}
+      {showTitleEditor && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 10000,
+          background: 'rgba(0,0,0,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center'
+        }} onClick={() => setShowTitleEditor(false)}>
+          <div style={{
+            background: 'white', borderRadius: 'var(--portal-radius)', padding: 24, minWidth: 300,
+            boxShadow: '0 20px 40px rgba(0,0,0,0.15)', fontFamily: 'var(--portal-font)'
+          }} onClick={e => e.stopPropagation()}>
+            <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>
+              {lang === 'ja' ? 'タイトルを編集' : 'Modifica Titolo'}
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--portal-ink-muted)', marginBottom: 12 }}>
+              {lang === 'ja'
+                ? `現在: ${titleLines}行で表示されています。2行以内に収まるよう短くしてください。`
+                : `Attualmente: ${titleLines} righe su etichetta. Accorcia a 2 righe massimo.`
+              }
+            </div>
+            <input
+              type="text"
+              value={titleEditorValue}
+              onChange={e => setTitleEditorValue(e.target.value)}
+              style={{
+                width: '100%', padding: '8px 10px', fontSize: 13, boxSizing: 'border-box',
+                border: '1px solid var(--portal-border)', borderRadius: 6, marginBottom: 12,
+                fontFamily: 'var(--portal-font)'
+              }}
+              autoFocus
+            />
+            <div style={{ fontSize: 11, color: 'var(--portal-ink-muted)', marginBottom: 12 }}>
+              {lang === 'ja'
+                ? `新しいタイトルは${estimateTitleLines(titleEditorValue)}行になります`
+                : `Il nuovo titolo avrà ${estimateTitleLines(titleEditorValue)} righe`
+              }
+            </div>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <button onClick={saveTitleEdit} style={{
+                flex: 1, padding: '8px 12px', fontSize: 12, fontWeight: 600,
+                background: 'var(--portal-ink)', color: 'white', border: 'none',
+                borderRadius: 6, cursor: 'pointer', fontFamily: 'var(--portal-font)'
+              }}>
+                {lang === 'ja' ? '保存' : 'Salva'}
+              </button>
+              <button onClick={() => setShowTitleEditor(false)} style={{
+                flex: 1, padding: '8px 12px', fontSize: 12, fontWeight: 600,
+                background: 'var(--portal-paper)', color: 'var(--portal-ink-soft)', border: '1px solid var(--portal-border)',
+                borderRadius: 6, cursor: 'pointer', fontFamily: 'var(--portal-font)'
+              }}>
+                {lang === 'ja' ? 'キャンセル' : 'Annulla'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

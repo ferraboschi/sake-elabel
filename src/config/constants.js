@@ -14,12 +14,12 @@ export const ALL_LANGUAGES = ['it', 'en', 'de', 'fr', 'es', 'ja']
 
 /**
  * Estimate how many lines a title would need on the PDF label.
- * Label: 55mm wide, 2.5mm margins, 6.1mm pittogramma → max ~41.9mm for title.
+ * Label: 55mm wide − 5 (margins) − 3 (buffer) − 6.1 (pittogramma) − 4 (spacing) = 36.9mm
  */
 export function estimateTitleLines(title) {
   if (!title) return 0
   const upper = title.toUpperCase()
-  const maxWidthMm = 41.9
+  const maxWidthMm = 36.9
   let lines = 1
   const words = upper.split(/\s+/)
   let currentLineWidth = 0
