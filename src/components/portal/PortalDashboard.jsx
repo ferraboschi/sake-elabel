@@ -247,7 +247,6 @@ export default function PortalDashboard() {
         <div className="portal-topbar-nav">
           <a href="#" className="active">{lang === 'ja' ? 'ダッシュボード' : 'Dashboard'}</a>
           <Link to="/portal/changes">{lang === 'ja' ? '変更' : 'Cambiamenti'}</Link>
-          <Link to="/archive">{lang === 'ja' ? 'アーカイブ' : 'Archivio'}</Link>
           <Link to="/importers">{lang === 'ja' ? '輸入者' : 'Importatori'}</Link>
           <div className="portal-lang-switch">
             <button className={lang === 'ja' ? 'active' : ''} onClick={() => setLang('ja')}>JP</button>
