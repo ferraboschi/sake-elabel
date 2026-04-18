@@ -6,6 +6,7 @@ import { useGenerateLabel } from '../../hooks/useGenerateLabel'
 import { downloadLabelPDF, downloadBoxLabelPDF } from '../../services/labelPrinter'
 import { isValidEAN13, detectBarcodeFormat } from '../../services/barcodeGenerator'
 import { estimateTitleLines, getMaxCharsFor2Lines } from '../../config/constants'
+import { recordProductChange } from '../../services/productChangeTracker'
 import QRCode from 'qrcode'
 
 /**
@@ -513,6 +514,7 @@ export default function PortalProduct() {
         }
       }
       if (mountedRef.current) setSaved(true)
+      recordProductChange(first.code, d.editedName || first.name, d.productTypeModified || first.category, d.finishesModified || [])
       console.log('[doSave] Save completed successfully')
     } catch (err) {
       console.error('[Save]', err)
@@ -634,6 +636,7 @@ export default function PortalProduct() {
         }
 
         setSaved(true)
+        recordProductChange(first.code, newTitle, ed.productTypeModified || first.category, ed.finishesModified || [])
         console.log('[saveTitleEdit] Title saved to Airtable successfully')
 
         // 4. Reload data from Airtable to confirm save persisted
