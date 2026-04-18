@@ -77,10 +77,11 @@ const FIELDS = {
   legalDescription:   { id: 'fldwiR0TCKQJWH3x1', name: 'Legal_Description' },
 
   // === Product Type / Finishes (modified by user) ===
-  productTypeCurrent: { id: 'fldPTC_placeholder',  name: 'Product_Type_Current' },
-  productFinishes:    { id: 'fldPF_placeholder',   name: 'Product_Finishes' },
-  typeModifiedFlag:   { id: 'fldTMF_placeholder',  name: 'Type_Modified_Flag' },
-  typeOriginal:       { id: 'fldTO_placeholder',    name: 'Type_Original' },
+  // COMMENTED OUT - placeholder field IDs cause 422 errors
+  // productTypeCurrent: { id: 'fldPTC_placeholder',  name: 'Product_Type_Current' },
+  // productFinishes:    { id: 'fldPF_placeholder',   name: 'Product_Finishes' },
+  // typeModifiedFlag:   { id: 'fldTMF_placeholder',  name: 'Type_Modified_Flag' },
+  // typeOriginal:       { id: 'fldTO_placeholder',    name: 'Type_Original' },
 
   // === E-Label status ===
   elabelStatus:       { id: 'fld8JHbfh7z3awZ2x', name: 'ELabel_Status' },
@@ -455,10 +456,15 @@ function normalizeRecord(record) {
     legalDescription: get('legalDescription') || '',
 
     // Product Type / Finishes (user modifications)
-    productTypeCurrent: get('productTypeCurrent') || '',
-    productFinishes: get('productFinishes') || '',
-    typeModifiedFlag: !!get('typeModifiedFlag'),
-    typeOriginal: get('typeOriginal') || '',
+    // COMMENTED OUT - placeholder field IDs cause 422 errors
+    // productTypeCurrent: get('productTypeCurrent') || '',
+    // productFinishes: get('productFinishes') || '',
+    // typeModifiedFlag: !!get('typeModifiedFlag'),
+    // typeOriginal: get('typeOriginal') || '',
+    productTypeCurrent: '',
+    productFinishes: '',
+    typeModifiedFlag: false,
+    typeOriginal: '',
 
     // E-Label status
     elabelStatus: getSelect('elabelStatus') || '',
