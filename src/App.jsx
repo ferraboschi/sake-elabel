@@ -14,6 +14,7 @@ const ImporterManager = lazy(() => import('./components/ImporterManager'))
 // New portal (clean UI)
 const PortalDashboard = lazy(() => import('./components/portal/PortalDashboard'))
 const PortalProduct = lazy(() => import('./components/portal/PortalProduct'))
+const ChangesPage = lazy(() => import('./components/portal/ChangesPage'))
 
 const Loading = () => (
   <div style={{ padding: '60px', textAlign: 'center', color: '#888' }}>Caricamento...</div>
@@ -35,6 +36,7 @@ function App() {
         {/* New portal (clean UI) */}
         <Route path="/portal" element={<PortalDashboard />} />
         <Route path="/portal/product/:slug" element={<PortalProduct />} />
+        <Route path="/portal/changes" element={<ChangesPage />} />
 
         {/* Public routes */}
         <Route path="/" element={<PortalDashboard />} />
