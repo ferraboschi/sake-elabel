@@ -30,8 +30,8 @@ export const captureSnapshot = (products) => {
       snapshot.productMap[key] = {
         id: product.id,
         code: product.code,
-        name: product.productName || '',
-        tipologia: product.productType || ''
+        name: product.name || '',
+        tipologia: product.category || ''
       }
     }
   })
@@ -82,8 +82,8 @@ export const detectChanges = (liveProducts) => {
         liveMap[key] = {
           id: product.id,
           code: product.code,
-          name: product.productName || '',
-          tipologia: product.productType || ''
+          name: product.name || '',
+          tipologia: product.category || ''
         }
       }
     })
