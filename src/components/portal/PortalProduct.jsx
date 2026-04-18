@@ -158,19 +158,102 @@ export default function PortalProduct() {
   const knownRecordIds = useRef([])
   // Track IME composition state so Enter during composition confirms characters, not saves
   const titleComposingRef = useRef(false)
+  // Track whether the component is still mounted to prevent stale alerts/setState
+  const mountedRef = useRef(true)
 
   const first = items[0] || {}
 
   // Load product
   useEffect(() => { if (slug) loadProduct() }, [slug])
 
-  // Flush autosave before page unload
+  // Cancel pending autosave on unmount (in-app navigation) and mark as unmounted
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+      if (autosaveTimer.current) {
+        clearTimeout(autosaveTimer.current)
+        autosaveTimer.current = null
+        console.log('[unmount] Cancelled pending autosave — saving via sendBeacon')
+        // Fire-and-forget save via sendBeacon for pending changes during SPA navigation.
+        // We cannot use async fetch here because the component is already unmounting.
+        // sendBeacon is reliable even during page teardown.
+        if (saveRef.current?._pendingPayloads) {
+          const payloads = saveRef.current._pendingPayloads()
+          if (payloads && payloads.length > 0) {
+            const API_KEY = import.meta.env.VITE_AIRTABLE_API_KEY || ''
+            const PROXY_URL = import.meta.env.VITE_AIRTABLE_PROXY_URL || ''
+            const USE_PROXY = !!PROXY_URL
+            const BASE_ID = import.meta.env.VITE_AIRTABLE_BASE_ID || 'appwCWGRd0jXOCxMA'
+            const TABLE_ID = 'tblilRsJLHIVJ1xju'
+            const apiBase = USE_PROXY
+              ? `${PROXY_URL.replace(/\/$/, '')}/api/airtable/v0`
+              : 'https://api.airtable.com/v0'
+            for (const { recordId, fields } of payloads) {
+              const url = `${apiBase}/${BASE_ID}/${TABLE_ID}/${recordId}`
+              const blob = new Blob(
+                [JSON.stringify({ fields, typecast: true })],
+                { type: 'application/json' }
+              )
+              // Note: sendBeacon doesn't support custom headers, so this only works
+              // with the proxy (which injects auth server-side). For direct Airtable
+              // calls in dev, we fall back to a keepalive fetch.
+              if (USE_PROXY) {
+                navigator.sendBeacon(url, blob)
+              } else {
+                fetch(url, {
+                  method: 'PATCH',
+                  headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${API_KEY}` },
+                  body: JSON.stringify({ fields, typecast: true }),
+                  keepalive: true,
+                }).catch(() => {}) // Silently ignore — best-effort save during navigation
+              }
+            }
+            console.log('[unmount] Sent', payloads.length, 'beacon save(s)')
+          }
+        }
+      }
+    }
+  }, [])
+
+  // Flush autosave before page unload (browser close / external navigation)
   useEffect(() => {
     const handleBeforeUnload = () => {
       if (autosaveTimer.current) {
         clearTimeout(autosaveTimer.current)
-        console.log('[beforeunload] Flushing pending autosave')
-        saveRef.current?.()
+        autosaveTimer.current = null
+        console.log('[beforeunload] Flushing pending autosave via sendBeacon')
+        // Use the same beacon approach as unmount — async fetch won't complete on page close
+        if (saveRef.current?._pendingPayloads) {
+          const payloads = saveRef.current._pendingPayloads()
+          if (payloads && payloads.length > 0) {
+            const API_KEY = import.meta.env.VITE_AIRTABLE_API_KEY || ''
+            const PROXY_URL = import.meta.env.VITE_AIRTABLE_PROXY_URL || ''
+            const USE_PROXY = !!PROXY_URL
+            const BASE_ID = import.meta.env.VITE_AIRTABLE_BASE_ID || 'appwCWGRd0jXOCxMA'
+            const TABLE_ID = 'tblilRsJLHIVJ1xju'
+            const apiBase = USE_PROXY
+              ? `${PROXY_URL.replace(/\/$/, '')}/api/airtable/v0`
+              : 'https://api.airtable.com/v0'
+            for (const { recordId, fields } of payloads) {
+              const url = `${apiBase}/${BASE_ID}/${TABLE_ID}/${recordId}`
+              if (USE_PROXY) {
+                const blob = new Blob(
+                  [JSON.stringify({ fields, typecast: true })],
+                  { type: 'application/json' }
+                )
+                navigator.sendBeacon(url, blob)
+              } else {
+                fetch(url, {
+                  method: 'PATCH',
+                  headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${API_KEY}` },
+                  body: JSON.stringify({ fields, typecast: true }),
+                  keepalive: true,
+                }).catch(() => {})
+              }
+            }
+          }
+        }
       }
     }
     window.addEventListener('beforeunload', handleBeforeUnload)
@@ -283,11 +366,83 @@ export default function PortalProduct() {
     if (!silent) setLoading(false)
   }
 
+  // Build the Airtable payload for all items (used by doSave and by beacon saves on unmount)
+  const buildPayloads = () => {
+    if (!items.length) return []
+    const d = ed
+    const payload = {}
+    for (const f of NUTRITION_FIELDS) {
+      payload[f.key] = parseFloat(normalizeNumeric(String(d[f.key]))) || 0
+    }
+    payload.ingredientsIt = normalizeFullWidth(d.ingredientsIt) || ''
+    const raw = payload.ingredientsIt
+    if (raw) {
+      for (const [l, suf] of Object.entries({ en: 'En', de: 'De', fr: 'Fr', es: 'Es' })) {
+        const { text } = autoTranslate(raw, l)
+        if (text) payload[`ingredients${suf}`] = text
+      }
+    }
+    const alc = parseFloat(normalizeNumeric(String(d.alcoholPct)))
+    if (!isNaN(alc) && alc >= 0) payload.alcoholPct = alc
+    if (d.editedName && d.editedName.trim()) {
+      payload.productName = d.editedName.trim()
+    }
+    if (d.productTypeModified !== undefined) {
+      const combinedType = composeProductTypeString(d.productTypeModified, d.finishesModified || [])
+      payload.productTypeCurrent = d.productTypeModified || ''
+      payload.productFinishes = (d.finishesModified || []).join(' ')
+      const originalClean = (d.productTypeOriginal || '').replace(/^\(|\)$/g, '').trim()
+      payload.typeModifiedFlag = combinedType !== originalClean
+      if (!d.productTypeOriginal && first.category) {
+        payload.typeOriginal = `(${first.category})`
+      }
+    }
+
+    // Map internal keys to Airtable field names (same logic as updateProduct in airtable.js)
+    // This is needed for beacon saves which bypass the updateProduct abstraction.
+    const FIELDS_MAP = {
+      energyKj: 'Energy_kJ', energyKcal: 'Energy_kcal', fatG: 'Fat_g',
+      saturatedFatG: 'Saturates_g', carbsG: 'Carbohydrates_g', sugarsG: 'Sugars_g',
+      proteinG: 'Protein_g', saltG: 'Salt_g', ingredientsIt: 'Ingredients_IT',
+      ingredientsEn: 'Ingredients_EN', ingredientsDe: 'Ingredients_DE',
+      ingredientsFr: 'Ingredients_FR', ingredientsEs: 'Ingredients_ES',
+      alcoholPct: 'Alcohol %', productName: 'Product Name', barcode: 'Barcode',
+      ean: 'codice EAN', eanBox: 'EAN_Box', bottlesPerBox: 'Bottles per box',
+    }
+
+    return items.map(item => {
+      const ip = { ...payload }
+      const ev = eanData[item._recordId]
+      if (ev !== undefined && ev !== '') {
+        ip.barcode = ev
+        if (ev.length === 13) { const n = parseInt(ev, 10); if (!isNaN(n)) ip.ean = n }
+      }
+      const ebv = eanBoxData[item._recordId]
+      if (ebv !== undefined && ebv !== '') {
+        const num = parseInt(ebv, 10)
+        ip.eanBox = (!isNaN(num) && String(num) === ebv.trim()) ? num : ebv
+      }
+      const bv = bpbData[item._recordId]
+      if (bv !== undefined && bv !== '') ip.bottlesPerBox = parseInt(bv, 10) || 0
+
+      // Convert to Airtable field names for beacon saves
+      const airtableFields = {}
+      for (const [key, value] of Object.entries(ip)) {
+        const fieldName = FIELDS_MAP[key]
+        if (fieldName && value !== undefined) {
+          airtableFields[fieldName] = value
+        }
+      }
+
+      return { recordId: item._recordId, fields: airtableFields }
+    })
+  }
+
   // Autosave - use ref to always get latest state
   const doSave = async () => {
     console.log('[doSave] Starting save, ed.editedName:', ed.editedName)
     if (!items.length) return
-    setSaving(true)
+    if (mountedRef.current) setSaving(true)
     try {
       const d = ed
       const payload = {}
@@ -348,20 +503,31 @@ export default function PortalProduct() {
           await updateProduct(item._recordId, ip)
           console.log('[doSave] Item updated successfully:', item._recordId)
         } catch (updateErr) {
+          // If component already unmounted, don't throw — the save was best-effort
+          if (!mountedRef.current) {
+            console.warn('[doSave] Save failed after unmount (expected during navigation):', updateErr.message)
+            return
+          }
           console.error('[doSave] Failed to update item', item._recordId, updateErr)
           throw updateErr
         }
       }
-      setSaved(true)
+      if (mountedRef.current) setSaved(true)
       console.log('[doSave] Save completed successfully')
     } catch (err) {
       console.error('[Save]', err)
-      alert(`Save error: ${err.message}`)
+      // Only show alert if component is still mounted — prevents stale error dialogs
+      // after navigating away from the product page
+      if (mountedRef.current) {
+        alert(`Save error: ${err.message}`)
+      }
     }
-    setSaving(false)
+    if (mountedRef.current) setSaving(false)
   }
 
   saveRef.current = doSave
+  // Expose payload builder for beacon saves during unmount/beforeunload
+  saveRef.current._pendingPayloads = buildPayloads
 
   const scheduleAutosave = useCallback(() => {
     if (autosaveTimer.current) clearTimeout(autosaveTimer.current)
@@ -530,6 +696,35 @@ export default function PortalProduct() {
   }
 
   // Print
+  const downloadQROnly = async () => {
+    const item = items[printFormat] || items[0]
+    if (!item) return
+
+    setSaving(true)
+    try {
+      const regionInfo = REGION_CODE_LABELS[printRegion]
+      const qrUrl = `https://label.sakecompany.com/${item.slug}?lang=${printLang}&country=${regionInfo?.label || 'Italia'}`
+      const qrCanvas = await QRCode.toCanvas(document.createElement('canvas'), qrUrl, {
+        width: 400, errorCorrectionLevel: 'H', margin: 2,
+        color: { dark: '#000000', light: '#ffffff' },
+      })
+      const qrDataUrl = qrCanvas.toDataURL('image/png')
+
+      // Download as PNG
+      const link = document.createElement('a')
+      link.href = qrDataUrl
+      link.download = `${item.slug || item.code || 'qr'}-qr.png`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+    } catch (err) {
+      console.error('QR download error:', err)
+      alert('Errore nel download del QR code')
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const handlePrint = async (isBox = false) => {
     const item = items[printFormat] || items[0]
     if (!item) return
@@ -1171,6 +1366,10 @@ export default function PortalProduct() {
               <button className="portal-btn portal-btn--secondary" style={{ flex: 1, fontSize: 11, padding: '8px 10px' }}
                 onClick={() => handlePrint(true)} disabled={generating || !canPrint}>
                 {`📦 ${currentItem?.volumeMl}ml Box`}
+              </button>
+              <button className="portal-btn portal-btn--secondary" style={{ flex: 1, fontSize: 11, padding: '8px 10px' }}
+                onClick={() => downloadQROnly()} disabled={generating}>
+                {generating ? '...' : `📱 ${currentItem?.volumeMl}ml QR Code`}
               </button>
             </div>
           </div>
