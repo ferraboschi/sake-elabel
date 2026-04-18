@@ -183,7 +183,9 @@ export default function PortalDashboard() {
           g.first.category, g.first.code, g.first.barcode,
           ...(g.items.map(i => i.code)),
         ].filter(Boolean).map(f => f.toLowerCase())
-        return fields.some(f => f.includes(q))
+        // Split query into terms and require ALL terms to be found (any order)
+        const terms = q.split(/\s+/).filter(t => t.length > 0)
+        return terms.every(term => fields.some(f => f.includes(term)))
       })
     } else if (statusFilter !== 'all') {
       result = groups.filter(g => g.status === statusFilter)
