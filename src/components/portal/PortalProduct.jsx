@@ -41,8 +41,8 @@ import './portal.css'
 
 // ── Ingredient suggestions by category ──
 const INGREDIENT_SUGGESTIONS = {
-  junmai:       { it: 'Riso, koji (Aspergillus oryzae), acqua',                      jp: '米、米麹、水' },
-  nonJunmai:    { it: 'Riso, koji (Aspergillus oryzae), acqua, alcol distillato',     jp: '米、米麹、水、醸造アルコール' },
+  junmai:       { it: 'riso, riso maltato (koji), acqua',                            jp: '米、米麹、水' },
+  nonJunmai:    { it: 'riso, riso maltato (koji), acqua, alcol distillato',          jp: '米、米麹、水、醸造アルコール' },
   umeshu:       { it: 'Alcol puro, prugne ume, zucchero',                             jp: '醸造アルコール、梅、砂糖' },
   yuzu:         { it: 'Sake, succo di yuzu, fruttosio',                               jp: '日本酒、柚子果汁、果糖' },
   peach:        { it: 'Sake, succo di pesca, fruttosio',                              jp: '日本酒、桃果汁、果糖' },
@@ -76,7 +76,7 @@ function getIngredientSuggestion(category, productName) {
   const name = (productName || '').toLowerCase()
   // Junmai check
   if (cat.includes('junmai')) return INGREDIENT_SUGGESTIONS.junmai
-  if (cat.includes('daiginjo') || cat.includes('ginjo') || cat.includes('honjozo')) return INGREDIENT_SUGGESTIONS.nonJunmai
+  if (cat.includes('futsushu') || cat.includes('tokubetsu honjozo') || cat.includes('honjozo') || cat.includes('daiginjo') || cat.includes('ginjo')) return INGREDIENT_SUGGESTIONS.nonJunmai
   // Fruit / liqueur
   const isFruit = /fruit|frutti|liqueur|liquore/i.test(cat)
   for (const rule of FRUIT_MAP) {
