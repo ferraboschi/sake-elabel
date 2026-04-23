@@ -390,13 +390,7 @@ export default function PortalProduct() {
     }
     if (d.productTypeModified !== undefined) {
       const combinedType = composeProductTypeString(d.productTypeModified, d.finishesModified || [])
-      payload.productTypeCurrent = d.productTypeModified || ''
-      payload.productFinishes = (d.finishesModified || []).join(' ')
-      const originalClean = (d.productTypeOriginal || '').replace(/^\(|\)$/g, '').trim()
-      payload.typeModifiedFlag = combinedType !== originalClean
-      if (!d.productTypeOriginal && first.category) {
-        payload.typeOriginal = `(${first.category})`
-      }
+      payload.productType = combinedType
     }
 
     // Map internal keys to Airtable field names (same logic as updateProduct in airtable.js)
@@ -409,6 +403,7 @@ export default function PortalProduct() {
       ingredientsFr: 'Ingredients_FR', ingredientsEs: 'Ingredients_ES',
       alcoholPct: 'Alcohol %', productName: 'Product Name', barcode: 'Barcode',
       ean: 'codice EAN', eanBox: 'EAN_Box', bottlesPerBox: 'Bottles per box',
+      productType: 'Product Type',
     }
 
     return items.map(item => {
@@ -470,17 +465,11 @@ export default function PortalProduct() {
       }
 
       // Save product type / finishes
+      // Include product type / finishes in title save payload
       if (d.productTypeModified !== undefined) {
         const combinedType = composeProductTypeString(d.productTypeModified, d.finishesModified || [])
-        payload.productTypeCurrent = d.productTypeModified || ''
-        payload.productFinishes = (d.finishesModified || []).join(' ')
-        // Compare with original to set modified flag
-        const originalClean = (d.productTypeOriginal || '').replace(/^\(|\)$/g, '').trim()
-        const isModified = combinedType !== originalClean
-        payload.typeModifiedFlag = isModified
-        if (!d.productTypeOriginal && first.category) {
-          payload.typeOriginal = `(${first.category})`
-        }
+        payload.productType = combinedType
+      }
         console.log('[doSave] Type:', combinedType, 'Original:', originalClean, 'Modified:', isModified)
       }
 
@@ -603,15 +592,12 @@ export default function PortalProduct() {
         if (!isNaN(alc) && alc >= 0) payload.alcoholPct = alc
 
         // Include product type / finishes in title save payload
+        // Include product type / finishes in title save payload
         if (ed.productTypeModified !== undefined) {
           const ct = composeProductTypeString(ed.productTypeModified, ed.finishesModified || [])
-          payload.productTypeCurrent = ed.productTypeModified || ''
-          payload.productFinishes = (ed.finishesModified || []).join(' ')
-          const oc = (ed.productTypeOriginal || '').replace(/^\(|\)$/g, '').trim()
-          payload.typeModifiedFlag = ct !== oc
-          if (!ed.productTypeOriginal && first.category) {
-            payload.typeOriginal = `(${first.category})`
-          }
+          payload.productType = ct
+          console.log('[doSave] Type saved to productType:', ct)
+        }
         }
 
         // Save for all items (siblings = different sizes of same product)
