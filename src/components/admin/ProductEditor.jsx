@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { LANG_OPTIONS, estimateTitleLines } from '../../config/constants'
 import { getImportersForRegion, REGION_CODE_LABELS } from '../../data/importers'
-import { isAirtableConfigured, updateProduct } from '../../services/airtable'
+import { isAirtableConfigured, updateProduct, composeProductTypeString } from '../../services/airtable'
 import { detectDetailedCategory, getDefaultLegalDescription, getDefaultIngredients } from '../../services/categoryDetector'
 import TopBar from './TopBar'
 
@@ -52,6 +52,8 @@ const ProductEditor = ({
 
   // Review edits state
   const [re, setRe] = useState({})
+  const [typeSaving, setTypeSaving] = useState(false)
+  const [typeSaved, setTypeSaved] = useState(false)
 
   // Initialize review data when product or language changes
   useEffect(() => {
@@ -110,6 +112,27 @@ const ProductEditor = ({
     const payload = fieldMap[field]
     if (payload) {
       updateProduct(product._recordId, payload).catch(err => console.warn(`[${field}] Save error:`, err.message))
+    }
+  }
+
+  const saveTypologia = async () => {
+    if (!product._recordId || !isAirtableConfigured()) return
+    setTypeSaving(true)
+    try {
+      const typeValue = re.productTypeCurrent || re.category || ''
+      const finitureArr = (re.finiture || '').split(/\s+/).filter(Boolean)
+      const combined = composeProductTypeString(typeValue, finitureArr)
+      await updateProduct(product._recordId, { productType: combined || typeValue })
+      setAllProducts(prev => prev.map(p =>
+        p._recordId === product._recordId ? { ...p, category: combined || typeValue } : p
+      ))
+      setTypeSaved(true)
+      setTimeout(() => setTypeSaved(false), 4000)
+    } catch (err) {
+      console.error('[Tipologia] Save error:', err.message)
+      alert('Errore nel salvataggio: ' + err.message)
+    } finally {
+      setTypeSaving(false)
     }
   }
 
@@ -322,15 +345,6 @@ const ProductEditor = ({
               type="text"
               value={re.productTypeCurrent || ''}
               onChange={e => updateField('productTypeCurrent', e.target.value)}
-              onBlur={e => {
-                const val = e.target.value.trim()
-                if (val && val !== 'Nessuna') {
-                  autoSave('productTypeCurrent', val)
-                  setAllProducts(prev => prev.map(p =>
-                    p._recordId === product._recordId ? { ...p, category: val } : p
-                  ))
-                }
-              }}
               placeholder={`${re.category || 'es: Tokubetsu Honjozo'} (lascia vuoto = usa originale)`}
               style={inputStyle}
             />
@@ -392,6 +406,14 @@ const ProductEditor = ({
                 </em>
               </div>
             )}
+          </div>
+
+          {/* Pulsante Salva Tipologia + Finiture */}
+          <div style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <button type="button" onClick={saveTypologia} disabled={typeSaving || !isAirtableConfigured() || !product._recordId} style={{ padding: '8px 24px', fontSize: '13px', fontWeight: 600, background: typeSaving ? '#a5b4fc' : '#635bff', color: '#fff', border: 'none', borderRadius: '6px', cursor: typeSaving ? 'wait' : 'pointer', opacity: (!isAirtableConfigured() || !product._recordId) ? 0.4 : 1, transition: 'all 0.15s' }}>
+              {typeSaving ? 'Salvataggio...' : 'Salva Tipologia e Finiture'}
+            </button>
+            {typeSaved && (<span style={{ fontSize: '13px', fontWeight: 600, color: '#059669' }}>✓ Salvato su Airtable</span>)}
           </div>
 
           {/* Denominazione legale */}
