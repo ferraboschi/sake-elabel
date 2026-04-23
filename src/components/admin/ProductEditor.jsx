@@ -67,8 +67,8 @@ const ProductEditor = ({
       : (fallbackIngredients && !isCJK(fallbackIngredients) ? fallbackIngredients : '')
     setRe({
       category: detCat || product.category || '',
-      // productTypeCurrent: session override for Tipologia (empty = use original)
-      productTypeCurrent: '',
+      // productTypeCurrent: override for Tipologia — load from Airtable if manually set
+      productTypeCurrent: (product.category && product.category !== detCat) ? product.category : '',
       // finiture: finishing descriptors appended after tipologia (e.g. "Koshu Nama")
       finiture: '',
       labelTitle: product.labelTitle || product.name || '',
@@ -105,6 +105,7 @@ const ProductEditor = ({
       volumeMl: value ? { volumeMl: parseInt(value) } : null,
       countryOfOrigin: { countryOfOrigin: value },
       eanBox: { eanBox: value },
+      productTypeCurrent: { productType: value },
     }
     const payload = fieldMap[field]
     if (payload) {
@@ -321,6 +322,15 @@ const ProductEditor = ({
               type="text"
               value={re.productTypeCurrent || ''}
               onChange={e => updateField('productTypeCurrent', e.target.value)}
+              onBlur={e => {
+                const val = e.target.value.trim()
+                if (val && val !== 'Nessuna') {
+                  autoSave('productTypeCurrent', val)
+                  setAllProducts(prev => prev.map(p =>
+                    p._recordId === product._recordId ? { ...p, category: val } : p
+                  ))
+                }
+              }}
               placeholder={`${re.category || 'es: Tokubetsu Honjozo'} (lascia vuoto = usa originale)`}
               style={inputStyle}
             />
