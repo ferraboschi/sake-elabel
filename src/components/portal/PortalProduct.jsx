@@ -51,7 +51,7 @@ const INGREDIENT_SUGGESTIONS = {
   pear:         { it: 'Sake, succo di pera, fruttosio',                               jp: '日本酒、梨果汁、果糖' },
   grape:        { it: 'Sake, succo di uva, fruttosio',                                jp: '日本酒、ぶどう果汁、果糖' },
   melon:        { it: 'Sake, succo di melone, fruttosio',                             jp: '日本酒、メロン果汁、果糖' },
-  ginger:       { it: 'Sake, zenzero, zucchero'                                     jp: '日本酒、生姜、砂糖' },
+  ginger:       { it: 'Sake, zenzero, zucchero',                                     jp: '日本酒、生姜、砂糖' },
   matcha:       { it: 'Sake, matcha, zucchero',                                      jp: '日本酒、抹茶、砂糖' },
   sakura:       { it: 'Sake, fiore di ciliegio, zucchero',                            jp: '日本酒、桜、砂糖' },
   genericFruit: { it: 'Sake, frutta, fruttosio',                                     jp: '日本酒、果実、果糖' },
