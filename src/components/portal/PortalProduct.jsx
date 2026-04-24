@@ -470,8 +470,6 @@ export default function PortalProduct() {
         const combinedType = composeProductTypeString(d.productTypeModified, d.finishesModified || [])
         payload.productType = combinedType
       }
-        console.log('[doSave] Type:', combinedType, 'Original:', originalClean, 'Modified:', isModified)
-      }
 
       console.log('[doSave] Payload:', payload)
       for (const item of items) {
