@@ -11,7 +11,7 @@ import QRCode from 'qrcode'
 
 /**
  * Validate a barcode code. Returns { valid: boolean, type: string, issue: string|null }
- *
+ */
 function validateBarcode(code, label) {
   if (!code || !code.trim()) return { valid: true, type: 'empty', issue: null }
   const clean = String(code).trim().replace(/\s/g, '')
