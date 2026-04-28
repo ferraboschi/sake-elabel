@@ -636,8 +636,13 @@ export default function PortalProduct() {
   }
 
   // Product type / finishes editing helpers
-  const updateProductType = (newType) => {
-    setEd(prev => ({ ...prev, productTypeModified: newType }))
+    const updateProductType = (newType) => {
+    setEd(prev => {
+      const cleanFinishes = (prev.finishesModified || []).filter(f =>
+        SAKE_FINISH_OPTIONS.includes(f)
+      )
+      return { ...prev, productTypeModified: newType, finishesModified: cleanFinishes }
+    })
     scheduleAutosave()
   }
 
