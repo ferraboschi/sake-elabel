@@ -15,7 +15,7 @@ import QRCode from 'qrcode'
 function validateBarcode(code, label) {
   if (!code || !code.trim()) return { valid: true, type: 'empty', issue: null }
   const clean = String(code).trim().replace(/\s/g, '')
-  const fmt = detectBarcodeFormat(clean
+  const fmt = detectBarcodeFormat(clean)
   if (!fmt) {
     return {
       valid: false,
