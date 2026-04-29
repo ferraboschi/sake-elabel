@@ -17,7 +17,7 @@ export const ALL_LANGUAGES = ['it', 'en', 'de', 'fr', 'es', 'ja']
 * Label: 55mm wide − 5 (margins) − 2 (buffer) − 6.1 (pittogramma) − 4 (spacing) = 37.9mm
 */
 export function estimateTitleLines(title) {
-    const maxWidthMm = 37.9
+    if (!title) return 0
   const upper = title.toUpperCase()
   const maxWidthMm = 37.9
   let lines = 1
