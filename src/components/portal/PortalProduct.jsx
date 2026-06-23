@@ -384,7 +384,7 @@ export default function PortalProduct() {
       }
     }
     const alc = parseFloat(normalizeNumeric(String(d.alcoholPct)))
-    if (!isNaN(alc) && alc >= 0) payload.alcoholPct = alc
+    if (!isNaN(alc) && alc >= 0) if (!isNaN(alc) && alc >= 0) payload.alcoholPct = alc / 100
     if (d.editedName && d.editedName.trim()) {
       payload.productName = d.editedName.trim()
     }
@@ -455,7 +455,7 @@ export default function PortalProduct() {
         }
       }
       const alc = parseFloat(normalizeNumeric(String(d.alcoholPct)))
-      if (!isNaN(alc) && alc >= 0) payload.alcoholPct = alc
+      if (!isNaN(alc) && alc >= 0) if (!isNaN(alc) && alc >= 0) payload.alcoholPct = alc / 100
       // Save edited title if provided
       if (d.editedName && d.editedName.trim()) {
         console.log('[doSave] Saving title:', d.editedName.trim())
@@ -587,7 +587,7 @@ export default function PortalProduct() {
           }
         }
         const alc = parseFloat(normalizeNumeric(String(ed.alcoholPct)))
-        if (!isNaN(alc) && alc >= 0) payload.alcoholPct = alc
+        if (!isNaN(alc) && alc >= 0) if (!isNaN(alc) && alc >= 0) payload.alcoholPct = alc / 100
 
         // Include product type / finishes in title save payload
         if (ed.productTypeModified !== undefined) {
