@@ -195,6 +195,11 @@ export const updateProduct = async (recordId, fields) => {
     return false
   }
 
+  // Alcohol: UI uses display values (15 = 15%), Airtable stores as decimal (0.15)
+  if (fields.alcoholPct !== undefined && fields.alcoholPct !== null) {
+    fields = { ...fields, alcoholPct: fields.alcoholPct / 100 }
+  }
+
   // Map internal keys to Airtable field names (PATCH uses field names)
   const airtableFields = {}
   for (const [key, value] of Object.entries(fields)) {
@@ -234,8 +239,12 @@ export const batchUpdateProducts = async (records) => {
 
   for (const batch of batches) {
     const airtableRecords = batch.map(rec => {
+      // Alcohol: UI uses display values (15 = 15%), Airtable stores as decimal (0.15)
+      const fields = (rec.fields.alcoholPct !== undefined && rec.fields.alcoholPct !== null)
+        ? { ...rec.fields, alcoholPct: rec.fields.alcoholPct / 100 }
+        : rec.fields
       const airtableFields = {}
-      for (const [key, value] of Object.entries(rec.fields)) {
+      for (const [key, value] of Object.entries(fields)) {
         const fieldDef = FIELDS[key]
         if (fieldDef && value !== undefined) {
           airtableFields[fieldDef.name] = value
@@ -274,7 +283,7 @@ function parsePackagingToFields(materialsStr) {
   }
   if (!materialsStr) return result
 
-  // Color mapping (Italian → internal)
+  // Color mapping (Italian â internal)
   const colorMap = {
     'trasparente': 'Trasparente', 'chiaro': 'Trasparente', 'clear': 'Trasparente', 'bianco': 'Trasparente',
     'verde': 'Verde', 'green': 'Verde',
@@ -370,7 +379,7 @@ function normalizeRecord(record) {
 
   const code = get('code') || ''
   const name = get('productName') || ''
-  // Slug MUST be unique — append product code to avoid duplicates
+  // Slug MUST be unique â append product code to avoid duplicates
   // (e.g. two "Sakurabijin Daiginjo" with different sizes)
   const nameSlug = name.toLowerCase()
     .replace(/[/]/g, '-')
@@ -444,7 +453,7 @@ function normalizeRecord(record) {
     // Sake-specific
     seimaibuai: get('seimaibuai') || null,
 
-    // Sales regions — array of country codes where product can be sold (e.g. ['ITA', 'ESP', 'DEU'])
+    // Sales regions â array of country codes where product can be sold (e.g. ['ITA', 'ESP', 'DEU'])
     salesRegion: get('salesRegion') || [],
 
     // Packaging & Operator
@@ -529,7 +538,7 @@ export const parseProductTypeString = (combined, knownTypes = []) => {
     }
   }
 
-  // No known type matched — treat everything as finishes
+  // No known type matched â treat everything as finishes
   const parts = str.split(/\s+/).filter(Boolean)
   return { productType: '', finishes: parts }
 }
