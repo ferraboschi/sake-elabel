@@ -106,6 +106,13 @@ async function loadBoxIcon() {
   }
 }
 
+// Normalize full-width (全角) characters to half-width (半角).
+// Japanese product names may contain full-width alphanumeric/punctuation (e.g. ％ → %)
+// which jsPDF's Helvetica (WinAnsiEncoding) cannot render — they appear as garbage (Ÿ etc.)
+const normalizeFullWidth = (s) => s
+  ? s.replace(/[！-～]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xfee0)).replace(/　/g, ' ')
+  : s
+
 function registerJpFont(doc, fontBase64) {
   if (!fontBase64) return false
   doc.addFileToVFS('NotoSansJP-Regular.ttf', fontBase64)
@@ -365,7 +372,7 @@ export const generateLabelPDF = async (rawLabel, options = {}) => {
 
   // Title (adaptive)
   cy += 1.4
-  const titleText = (label.labelTitle || label.name || '').toUpperCase()
+  const titleText = normalizeFullWidth((label.labelTitle || label.name || '').toUpperCase())
   const titleAvailW = CW - PITTO_SIZE - 4          // gap between title and pittogramma
   let titleStyle = TITLE_SIZES[0]
   let nameLines
