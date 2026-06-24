@@ -178,9 +178,12 @@ const LS = {
 
 // Adaptive title sizing (try largest first, fall back for long names)
 const TITLE_SIZES = [
-  { pt: 8,   bl: 2.0, th: 2.8, ls: 3.1 },
-  { pt: 7,   bl: 1.75, th: 2.5, ls: 2.75 },
-  { pt: 6.5, bl: 1.6, th: 2.3, ls: 2.55 },
+  { pt: 8,   bl: 2.0,  th: 2.8,  ls: 3.1 },
+  { pt: 7,   bl: 1.75, th: 2.5,  ls: 2.75 },
+  { pt: 6.5, bl: 1.6,  th: 2.3,  ls: 2.55 },
+  { pt: 6,   bl: 1.5,  th: 2.1,  ls: 2.4 },
+  { pt: 5.5, bl: 1.4,  th: 1.95, ls: 2.2 },
+  { pt: 5,   bl: 1.25, th: 1.8,  ls: 2.05 },
 ]
 
 // Layout dimensions (mm)
@@ -376,11 +379,23 @@ export const generateLabelPDF = async (rawLabel, options = {}) => {
   const titleAvailW = CW - PITTO_SIZE - 4          // gap between title and pittogramma
   let titleStyle = TITLE_SIZES[0]
   let nameLines
+
+  // Pass 1: prefer single-line — try all sizes down to EU minimum (5pt)
+  let singleLineFit = false
   for (let i = 0; i < TITLE_SIZES.length; i++) {
     titleStyle = TITLE_SIZES[i]
     tmp.setFontSize(titleStyle.pt)
     nameLines = tmp.splitTextToSize(titleText, titleAvailW)
-    if (nameLines.length <= 2) break
+    if (nameLines.length === 1) { singleLineFit = true; break }
+  }
+  // Pass 2: if no single-line fit, pick largest size that gives ≤ 2 lines
+  if (!singleLineFit) {
+    for (let i = 0; i < TITLE_SIZES.length; i++) {
+      titleStyle = TITLE_SIZES[i]
+      tmp.setFontSize(titleStyle.pt)
+      nameLines = tmp.splitTextToSize(titleText, titleAvailW)
+      if (nameLines.length <= 2) break
+    }
   }
   // Hard clamp: guarantee max 2 title lines (ellipsis if truncated)
   if (nameLines.length > 2) {
