@@ -62,12 +62,31 @@ const SHOPIFY_TYPE_MAP = {
   'Shochu':             'Shochu',
   'Gin':                'Gin',
   'whisky':             'Whisky',
+  'Whisky':             'Whisky',
   'Awamori':            'Awamori',
   'Rum':                'Rum',
+  'Vodka':              'Vodka',
   // Wine
   'vino':               'Vino',
   // Beer
   'Birra':              'Birra',
+}
+
+/**
+ * Match a product-type string against the spirit keywords (word-boundary,
+ * so "Ginjo" doesn't match "gin"). Covers Airtable variants like
+ * "Japanese Whisky", "Japanese craft gin", "Japanese rum", "Japanese vodka".
+ * Returns the canonical spirit label, or null.
+ */
+function spiritFromTypeString(type) {
+  const typeLower = (type || '').toLowerCase()
+  if (!typeLower) return null
+  for (const rule of SPIRIT_KEYWORDS) {
+    if (rule.keywords.some(kw => new RegExp(`\\b${kw.trim()}\\b`).test(typeLower))) {
+      return rule.label
+    }
+  }
+  return null
 }
 
 /**
@@ -84,8 +103,11 @@ export function detectDetailedCategory(productName, airtableCategory = '', shopi
   // 1. Determine the base type (prefer Shopify, fall back to Airtable)
   const baseType = shopifyType || airtableCategory || ''
 
-  // 2. Map to canonical label
-  let displayLabel = SHOPIFY_TYPE_MAP[baseType] || baseType
+  // 2. Map to canonical label; unmapped types that name a spirit
+  //    ("Japanese Whisky", "Japanese craft gin", …) resolve to that spirit
+  let displayLabel = SHOPIFY_TYPE_MAP[baseType]
+    || (!CATEGORY_DESCRIPTIONS[baseType] && spiritFromTypeString(baseType))
+    || baseType
 
   // 3. For fruit/liqueur products, try to detect specific fruit from name
   const isFruit = ['Ai frutti', 'Fruit Sake', 'Sake ai frutti'].includes(baseType)
@@ -134,6 +156,15 @@ const CATEGORY_DESCRIPTIONS = {
     fr: 'Boisson alcoolique à base de fruits',
     es: 'Bebida alcohólica a base de fruta',
     ja: '果実酒',
+  },
+  // Generic distilled spirit — safety net for products still tagged "Spirit"
+  // without a recognizable sub-type. NEVER falls back to the sake wording.
+  _spirit: {
+    it: 'Bevanda spiritosa distillata',
+    de: 'Destillierte Spirituose',
+    fr: 'Boisson spiritueuse distillée',
+    es: 'Bebida espirituosa destilada',
+    ja: '蒸留酒',
   },
   // Shochu
   Shochu: {
@@ -239,6 +270,17 @@ export function getDefaultLegalDescription(detectedCategory, lang = 'it') {
   // Check direct match (Shochu, Gin, Whisky, Rum, etc.)
   if (CATEGORY_DESCRIPTIONS[detectedCategory]) {
     return CATEGORY_DESCRIPTIONS[detectedCategory][lang] || CATEGORY_DESCRIPTIONS[detectedCategory].it
+  }
+
+  // Spirits must NEVER get the rice-fermentation wording: resolve any
+  // spirit-like category ("Spirit", "Japanese Whisky", …) to its own
+  // denomination, or to the generic distilled-spirit one.
+  if (['Spirit', 'Spirits'].includes(detectedCategory)) {
+    return CATEGORY_DESCRIPTIONS._spirit[lang] || CATEGORY_DESCRIPTIONS._spirit.it
+  }
+  const spiritLabel = spiritFromTypeString(detectedCategory)
+  if (spiritLabel && CATEGORY_DESCRIPTIONS[spiritLabel]) {
+    return CATEGORY_DESCRIPTIONS[spiritLabel][lang] || CATEGORY_DESCRIPTIONS[spiritLabel].it
   }
 
   // Fallback to sake description

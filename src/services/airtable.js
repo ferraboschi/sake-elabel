@@ -135,6 +135,22 @@ export const isAirtableConfigured = () => {
 }
 
 /**
+ * Convert a display alcohol value (15 = 15%) to the Airtable decimal (0.15).
+ * Returns undefined for missing values or values outside the plausible 0–100
+ * range, so callers drop the field instead of writing garbage to Airtable.
+ */
+export const alcoholDisplayToDecimal = (value) => {
+  if (value === undefined || value === null || value === '') return undefined
+  const n = typeof value === 'number' ? value : parseFloat(value)
+  if (isNaN(n)) return undefined
+  if (n < 0 || n > 100) {
+    console.error(`[Airtable] Refusing to save implausible alcohol value: ${value}`)
+    return undefined
+  }
+  return n / 100
+}
+
+/**
  * Fetch all products from Master Product List
  * Returns normalized product objects
  */
@@ -195,9 +211,10 @@ export const updateProduct = async (recordId, fields) => {
     return false
   }
 
-  // Alcohol: UI uses display values (15 = 15%), Airtable stores as decimal (0.15)
+  // Alcohol: UI uses display values (15 = 15%), Airtable stores as decimal (0.15).
+  // This is the ONLY place the conversion happens — callers must pass display values.
   if (fields.alcoholPct !== undefined && fields.alcoholPct !== null) {
-    fields = { ...fields, alcoholPct: fields.alcoholPct / 100 }
+    fields = { ...fields, alcoholPct: alcoholDisplayToDecimal(fields.alcoholPct) }
   }
 
   // Map internal keys to Airtable field names (PATCH uses field names)
@@ -241,7 +258,7 @@ export const batchUpdateProducts = async (records) => {
     const airtableRecords = batch.map(rec => {
       // Alcohol: UI uses display values (15 = 15%), Airtable stores as decimal (0.15)
       const fields = (rec.fields.alcoholPct !== undefined && rec.fields.alcoholPct !== null)
-        ? { ...rec.fields, alcoholPct: rec.fields.alcoholPct / 100 }
+        ? { ...rec.fields, alcoholPct: alcoholDisplayToDecimal(rec.fields.alcoholPct) }
         : rec.fields
       const airtableFields = {}
       for (const [key, value] of Object.entries(fields)) {
@@ -543,6 +560,105 @@ export const parseProductTypeString = (combined, knownTypes = []) => {
   return { productType: '', finishes: parts }
 }
 
+// ═══════════════════════════════════════════════════════
+// Label print snapshots (see services/printSnapshot.js)
+// ═══════════════════════════════════════════════════════
+
+// Dedicated long-text field holding the last-print snapshot JSON per record.
+// NOT in FIELDS: requesting it in the main fetch would 422 until the field
+// exists in Airtable — snapshot reads/writes degrade gracefully instead.
+const SNAPSHOT_FIELD = 'ELabel_Snapshot'
+let _snapshotFieldMissing = false
+
+/**
+ * Fetch all print snapshots, keyed by product CODE and record id.
+ * Returns null when the snapshot field doesn't exist yet or the fetch fails.
+ */
+export const fetchLabelSnapshots = async () => {
+  if (!isAirtableConfigured() || _snapshotFieldMissing) return null
+
+  try {
+    const map = {}
+    let offset = null
+    const fieldParams = [FIELDS.code.id, SNAPSHOT_FIELD]
+      .map(f => `fields%5B%5D=${encodeURIComponent(f)}`).join('&')
+    do {
+      const url = `${API_BASE}/${AIRTABLE_BASE_ID}/${PRODUCT_TABLE_ID}?${fieldParams}${offset ? `&offset=${offset}` : ''}`
+      const response = await fetchWithRetry(url, { headers: headers() })
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}))
+        throw new Error(err.error?.message || response.statusText)
+      }
+      const data = await response.json()
+      for (const record of data.records) {
+        const raw = record.fields[SNAPSHOT_FIELD]
+        if (!raw) continue
+        try {
+          const snap = JSON.parse(raw)
+          map[record.id] = snap
+          const code = record.fields[FIELDS.code.name]
+          if (code) map[code] = snap
+        } catch { /* malformed snapshot cell — ignore */ }
+      }
+      offset = data.offset
+    } while (offset)
+    return map
+  } catch (err) {
+    _snapshotFieldMissing = true
+    console.warn(`[Airtable] Snapshot fetch failed (create a long-text field "${SNAPSHOT_FIELD}" to enable reprint tracking):`, err.message)
+    return null
+  }
+}
+
+/**
+ * Write (or clear, with null) the print snapshot of a single record.
+ */
+export const updateLabelSnapshot = async (recordId, snapshot) => {
+  if (!isAirtableConfigured()) return false
+
+  try {
+    const url = `${API_BASE}/${AIRTABLE_BASE_ID}/${PRODUCT_TABLE_ID}/${recordId}`
+    const response = await fetchWithRetry(url, {
+      method: 'PATCH',
+      headers: headers(),
+      body: JSON.stringify({
+        fields: { [SNAPSHOT_FIELD]: snapshot ? JSON.stringify(snapshot) : '' },
+      }),
+    })
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}))
+      throw new Error(err.error?.message || response.statusText)
+    }
+    return true
+  } catch (err) {
+    console.warn(`[Airtable] Snapshot save failed (create a long-text field "${SNAPSHOT_FIELD}" to enable reprint tracking):`, err.message)
+    return false
+  }
+}
+
+/**
+ * Fetch the select options of the "Product Type" field from the Airtable schema
+ * (Meta API, forwarded by the proxy). Returns an array of option names, or null
+ * when the schema isn't reachable — callers fall back to a local list.
+ */
+export const fetchProductTypeOptions = async () => {
+  if (!isAirtableConfigured()) return null
+
+  try {
+    const url = `${API_BASE}/meta/bases/${AIRTABLE_BASE_ID}/tables`
+    const response = await fetchWithRetry(url, { headers: headers() })
+    if (!response.ok) throw new Error(response.statusText)
+    const data = await response.json()
+    const table = data.tables?.find(t => t.id === PRODUCT_TABLE_ID)
+    const field = table?.fields?.find(f => f.id === FIELDS.productType.id || f.name === FIELDS.productType.name)
+    const choices = field?.options?.choices?.map(c => c.name).filter(Boolean) || []
+    return choices.length ? choices : null
+  } catch (err) {
+    console.warn('[Airtable] Product Type options fetch failed, using local list:', err.message)
+    return null
+  }
+}
+
 export default {
   isAirtableConfigured,
   fetchProducts,
@@ -553,4 +669,8 @@ export default {
   getModifiedProducts,
   composeProductTypeString,
   parseProductTypeString,
+  alcoholDisplayToDecimal,
+  fetchLabelSnapshots,
+  updateLabelSnapshot,
+  fetchProductTypeOptions,
 }

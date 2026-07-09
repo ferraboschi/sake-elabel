@@ -29,19 +29,16 @@ jobs:
 
       - name: Build
         run: npm run build
+        # Every VITE_* value is inlined into the PUBLIC JS bundle.
+        # Never add API tokens or passwords here — writes go through the
+        # proxy workers, which hold the real credentials server-side.
         env:
           VITE_AIRTABLE_PROXY_URL: ${{ secrets.VITE_AIRTABLE_PROXY_URL }}
           VITE_AIRTABLE_BASE_ID: ${{ secrets.VITE_AIRTABLE_BASE_ID }}
           VITE_SHOPIFY_STORE: ${{ secrets.VITE_SHOPIFY_STORE }}
-          VITE_SHOPIFY_TOKEN: ${{ secrets.VITE_SHOPIFY_TOKEN }}
           VITE_SHOPIFY_PROXY: ${{ secrets.VITE_SHOPIFY_PROXY }}
           VITE_ADMIN_PASSWORD: ${{ secrets.VITE_ADMIN_PASSWORD }}
           VITE_PARTNER_PASSWORD: ${{ secrets.VITE_PARTNER_PASSWORD }}
-          VITE_DROPBOX_REFRESH_TOKEN: ${{ secrets.VITE_DROPBOX_REFRESH_TOKEN }}
-          VITE_DROPBOX_APP_KEY: ${{ secrets.VITE_DROPBOX_APP_KEY }}
-          VITE_DROPBOX_APP_SECRET: ${{ secrets.VITE_DROPBOX_APP_SECRET }}
-          VITE_DROPBOX_FOLDER: ${{ secrets.VITE_DROPBOX_FOLDER }}
-          VITE_DROPBOX_ROOT_NAMESPACE: ${{ secrets.VITE_DROPBOX_ROOT_NAMESPACE }}
 
       - uses: actions/upload-pages-artifact@v3
         with:

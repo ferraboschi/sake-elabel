@@ -15,10 +15,14 @@ const SHOPIFY_TOKEN = import.meta.env.VITE_SHOPIFY_TOKEN || '' // Admin API acce
 const API_VERSION = '2025-01'
 
 /**
- * Check if Shopify API is configured
+ * Check if Shopify API is configured.
+ * With a proxy the worker injects the token server-side, so no client token
+ * is needed (and none should be shipped in the public bundle).
  */
 export const isShopifyConfigured = () => {
-  return !!SHOPIFY_STORE && !!SHOPIFY_TOKEN && SHOPIFY_TOKEN.length > 10
+  if (!SHOPIFY_STORE) return false
+  if (import.meta.env.VITE_SHOPIFY_PROXY) return true
+  return !!SHOPIFY_TOKEN && SHOPIFY_TOKEN.length > 10
 }
 
 /**
