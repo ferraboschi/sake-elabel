@@ -42,7 +42,8 @@ export default function LabelPreview({
 }) {
   const barcodeRef = useRef(null)
   const t = TRANSLATIONS[lang] || TRANSLATIONS.it
-  const desc = legalDescription || t.desc
+  // Empty for well-known spirits — never fall back to the sake wording.
+  const desc = legalDescription || ''
 
   // Render barcode only if present — maximize size within column
   useEffect(() => {
@@ -90,7 +91,9 @@ export default function LabelPreview({
       {/* Body: text + barcode column */}
       <div style={S.body}>
         <div>
-          <div style={{ fontSize: '6.5px', color: '#555', lineHeight: 1.35 }}>{desc}</div>
+          {/* Empty for well-known spirits: keep the line's height ( ) so
+              ingredients and the rest don't shift up. */}
+          <div style={{ fontSize: '6.5px', color: '#555', lineHeight: 1.35 }}>{desc || ' '}</div>
 
           {ingredients && (
             <>

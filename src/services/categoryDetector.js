@@ -31,12 +31,15 @@ const FRUIT_KEYWORDS = [
 /**
  * Keyword-based detection for spirit sub-types
  */
+// Order matters: more specific shochu sub-types are matched before the generic
+// "shochu" rule (e.g. "Kokuto Shochu" must resolve to Kokuto, not plain Shochu).
 const SPIRIT_KEYWORDS = [
-  { keywords: ['shochu', 'shōchū'],      label: 'Shochu',            labelIt: 'Shochu' },
+  { keywords: ['kokuto'],                 label: 'Kokuto Shochu',     labelIt: 'Kokuto Shochu' },
+  { keywords: ['awamori'],                label: 'Awamori',           labelIt: 'Awamori' },
+  { keywords: ['shochu', 'shōchū'],       label: 'Shochu',            labelIt: 'Shochu' },  // incl. Honkaku Shochu
   { keywords: ['gin'],                    label: 'Gin',               labelIt: 'Gin' },
   { keywords: ['whisky', 'whiskey'],      label: 'Whisky',            labelIt: 'Whisky' },
   { keywords: ['rum'],                    label: 'Rum',               labelIt: 'Rum' },
-  { keywords: ['awamori'],               label: 'Awamori',           labelIt: 'Awamori' },
   { keywords: ['vodka'],                  label: 'Vodka',             labelIt: 'Vodka' },
 ]
 
@@ -58,13 +61,19 @@ const SHOPIFY_TYPE_MAP = {
   // Fruit / liqueur
   'Ai frutti':          'Sake ai frutti',    // will be refined by keyword detection
   'Fruit Sake':         'Sake ai frutti',    // will be refined by keyword detection
-  // Spirits
+  // Shochu family
   'Shochu':             'Shochu',
+  'Honkaku Shochu':     'Shochu',        // umbrella term → generic shochu denomination
+  'Kokuto Shochu':      'Kokuto Shochu',
+  'Awamori':            'Awamori',
+  // Western spirits (+ Japanese variants)
   'Gin':                'Gin',
+  'Japanese craft gin': 'Gin',
   'whisky':             'Whisky',
   'Whisky':             'Whisky',
-  'Awamori':            'Awamori',
+  'Japanese Whisky':    'Whisky',
   'Rum':                'Rum',
+  'Japanese Rum':       'Rum',
   'Vodka':              'Vodka',
   // Wine
   'vino':               'Vino',
@@ -166,7 +175,7 @@ const CATEGORY_DESCRIPTIONS = {
     es: 'Bebida espirituosa destilada',
     ja: '蒸留酒',
   },
-  // Shochu
+  // Shochu (Honkaku — the umbrella category)
   Shochu: {
     it: 'Distillato giapponese di cereali',
     de: 'Japanisches Getreidedestillat',
@@ -174,46 +183,26 @@ const CATEGORY_DESCRIPTIONS = {
     es: 'Destilado japonés de cereales',
     ja: '焼酎',
   },
-  // Awamori
+  // Kokuto Shochu (rice koji + cane sugar)
+  'Kokuto Shochu': {
+    it: 'Distillato giapponese di riso e zucchero di canna',
+    de: 'Japanisches Destillat aus Reis und Rohrzucker',
+    fr: 'Distillat japonais de riz et de sucre de canne',
+    es: 'Destilado japonés de arroz y azúcar de caña',
+    ja: '黒糖焼酎',
+  },
+  // Awamori (Okinawa)
   Awamori: {
-    it: 'Distillato giapponese di riso',
-    de: 'Japanisches Reisdestillat',
-    fr: 'Distillat japonais de riz',
-    es: 'Destilado japonés de arroz',
+    it: 'Distillato di cereali di Okinawa',
+    de: 'Getreidedestillat aus Okinawa',
+    fr: "Distillat de céréales d'Okinawa",
+    es: 'Destilado de cereales de Okinawa',
     ja: '泡盛',
   },
-  // Gin
-  Gin: {
-    it: 'Gin',
-    de: 'Gin',
-    fr: 'Gin',
-    es: 'Gin',
-    ja: 'ジン',
-  },
-  // Whisky
-  Whisky: {
-    it: 'Whisky giapponese',
-    de: 'Japanischer Whisky',
-    fr: 'Whisky japonais',
-    es: 'Whisky japonés',
-    ja: 'ウイスキー',
-  },
-  // Rum
-  Rum: {
-    it: 'Rum',
-    de: 'Rum',
-    fr: 'Rhum',
-    es: 'Ron',
-    ja: 'ラム',
-  },
-  // Vodka
-  Vodka: {
-    it: 'Vodka',
-    de: 'Wodka',
-    fr: 'Vodka',
-    es: 'Vodka',
-    ja: 'ウォッカ',
-  },
+  // NOTE: Rum, Gin, Vodka, Whisky are intentionally omitted — these are
+  // well-known spirits whose legal category name (Reg. UE 2019/787) already
+  // appears on the "tipologia" line, so they carry NO extra denomination line.
+  // See NO_DESCRIPTION_TYPES and getDefaultLegalDescription below.
   // Wine
   Vino: {
     it: 'Vino',
@@ -247,8 +236,17 @@ const SAKE_CATEGORIES = [
   'Futsushu', 'Sake',
 ]
 
+// Well-known spirits that carry NO explanatory denomination line: the legal
+// category name (Reg. UE 2019/787) is already shown on the "tipologia" line,
+// so the description line stays intentionally EMPTY (never falls back to sake).
+const NO_DESCRIPTION_TYPES = ['Rum', 'Gin', 'Vodka', 'Whisky']
+
 /**
  * Get the default legal description for a product based on its detected category.
+ *
+ * Returns '' (empty) for well-known western spirits — that empty line is kept
+ * as blank space on the label so nothing else shifts (see labelPrinter.js /
+ * LabelPreview.jsx).
  *
  * @param {string} detectedCategory - The category from detectDetailedCategory()
  * @param {string} lang - Language code (it, de, fr, es, ja)
@@ -257,33 +255,37 @@ const SAKE_CATEGORIES = [
 export function getDefaultLegalDescription(detectedCategory, lang = 'it') {
   if (!detectedCategory) return CATEGORY_DESCRIPTIONS._sake[lang] || CATEGORY_DESCRIPTIONS._sake.it
 
-  // Check fruit categories
+  // Fruit / sake families
   if (FRUIT_CATEGORIES.includes(detectedCategory)) {
     return CATEGORY_DESCRIPTIONS._fruit[lang] || CATEGORY_DESCRIPTIONS._fruit.it
   }
-
-  // Check sake categories
   if (SAKE_CATEGORIES.includes(detectedCategory)) {
     return CATEGORY_DESCRIPTIONS._sake[lang] || CATEGORY_DESCRIPTIONS._sake.it
   }
 
-  // Check direct match (Shochu, Gin, Whisky, Rum, etc.)
-  if (CATEGORY_DESCRIPTIONS[detectedCategory]) {
-    return CATEGORY_DESCRIPTIONS[detectedCategory][lang] || CATEGORY_DESCRIPTIONS[detectedCategory].it
+  // Resolve to a canonical spirit/shochu key ("Japanese Whisky" → "Whisky",
+  // "Kokuto Shochu" → "Kokuto Shochu", "Honkaku Shochu" → "Shochu", …).
+  const spiritKey = spiritFromTypeString(detectedCategory)
+
+  // Well-known western spirits: no explanatory line.
+  if (NO_DESCRIPTION_TYPES.includes(detectedCategory) || NO_DESCRIPTION_TYPES.includes(spiritKey)) {
+    return ''
   }
 
-  // Spirits must NEVER get the rice-fermentation wording: resolve any
-  // spirit-like category ("Spirit", "Japanese Whisky", …) to its own
-  // denomination, or to the generic distilled-spirit one.
+  // Direct match (Vino, Birra) or resolved shochu-family key (Shochu, Kokuto
+  // Shochu, Awamori).
+  const key = CATEGORY_DESCRIPTIONS[detectedCategory] ? detectedCategory
+            : (spiritKey && CATEGORY_DESCRIPTIONS[spiritKey]) ? spiritKey
+            : null
+  if (key) return CATEGORY_DESCRIPTIONS[key][lang] || CATEGORY_DESCRIPTIONS[key].it
+
+  // Retired generic "Spirit" (should be re-tagged via the portal) — safety net,
+  // never the rice-fermentation wording.
   if (['Spirit', 'Spirits'].includes(detectedCategory)) {
     return CATEGORY_DESCRIPTIONS._spirit[lang] || CATEGORY_DESCRIPTIONS._spirit.it
   }
-  const spiritLabel = spiritFromTypeString(detectedCategory)
-  if (spiritLabel && CATEGORY_DESCRIPTIONS[spiritLabel]) {
-    return CATEGORY_DESCRIPTIONS[spiritLabel][lang] || CATEGORY_DESCRIPTIONS[spiritLabel].it
-  }
 
-  // Fallback to sake description
+  // Unknown / untyped sake-like product → sake denomination.
   return CATEGORY_DESCRIPTIONS._sake[lang] || CATEGORY_DESCRIPTIONS._sake.it
 }
 

@@ -358,7 +358,10 @@ export const generateLabelPDF = async (rawLabel, options = {}) => {
   const TW = CW - BC_W                              // text width (always narrowed to keep layout consistent)
   const lang = label.language || 'it'
   const t = TRANSLATIONS[lang] || TRANSLATIONS.it
-  const descText = label.legalDescription || t.desc
+  // Legal denomination line. Empty for well-known spirits (Rum/Gin/Vodka/Whisky):
+  // NEVER fall back to t.desc (the sake wording). The line's height is reserved
+  // unconditionally below, so an empty value stays blank without shifting layout.
+  const descText = label.legalDescription || ''
   const warnings = [t.pregnancy, t.minor, t.storage]
   // Ingredients/allergens: fallback chain — selected lang → English → Italian → any available
   const pickText = (obj) => {
