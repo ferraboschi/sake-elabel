@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
-import { fetchProducts, updateProduct, isAirtableConfigured, composeProductTypeString, parseProductTypeString } from '../../services/airtable'
+import { fetchProducts, updateProduct, isAirtableConfigured, composeProductTypeString, parseProductTypeString, alcoholDisplayToDecimal, fetchProductTypeOptions } from '../../services/airtable'
 import { translateIngredients as autoTranslate, autoFillIngredients } from '../../services/ingredientTranslator'
 import { useGenerateLabel } from '../../hooks/useGenerateLabel'
 import { downloadLabelPDF, downloadBoxLabelPDF } from '../../services/labelPrinter'
@@ -101,13 +101,18 @@ const normalizeFullWidth = (s) => s ? s.replace(/[\uff01-\uff5e]/g, c => String.
 const normalizeNumeric = (s) => s ? normalizeFullWidth(s).replace(/[^0-9.]/g, '') : s
 
 // ── Sake product types (Tipologia) ──
+// Local fallback when the Airtable schema isn't reachable. The generic
+// "Spirit" is retired: spirits must carry their specific type (Shochu, Gin, …).
 const SAKE_TYPE_OPTIONS = [
   '', // empty = no type selected
   'Daiginjo', 'Ginjo', 'Junmai', 'Junmai Daiginjo', 'Junmai Ginjo',
   'Junmai Genshu', 'Honjozo', 'Tokubetsu Honjozo', 'Tokubetsu Junmai',
-  'Futsushu', 'Sparkling', 'Fruit Sake', 'Spirit', 'Shochu', 'Gin', 'Whisky',
+  'Futsushu', 'Sparkling', 'Fruit Sake', 'Shochu', 'Gin', 'Whisky',
   'Awamori', 'Rum', 'Vodka', 'Birra', 'Vino',
 ]
+
+// Types that must not be assignable anymore (see banner "tipologia da confermare")
+const RETIRED_TYPE_OPTIONS = ['Spirit', 'Spirits']
 
 // ── Sake finishes (Finiture) — toggleable tags ──
 const SAKE_FINISH_OPTIONS = [
@@ -136,6 +141,22 @@ export default function PortalProduct() {
   // Title editor modal
   const [showTitleEditor, setShowTitleEditor] = useState(false)
   const [titleEditorValue, setTitleEditorValue] = useState('')
+
+  // Product Type choices from the Airtable schema + confirm flow
+  const [typeOptions, setTypeOptions] = useState(null)
+  const [typePick, setTypePick] = useState('')
+  const [typeConfirming, setTypeConfirming] = useState(false)
+
+  useEffect(() => {
+    fetchProductTypeOptions().then(opts => { if (opts) setTypeOptions(opts) })
+  }, [])
+
+  // Live Airtable select options when reachable, local list otherwise —
+  // minus the retired generic "Spirit".
+  const productTypeChoices = React.useMemo(() => {
+    const base = (typeOptions || SAKE_TYPE_OPTIONS).filter(Boolean)
+    return [...new Set(base)].filter(t => !RETIRED_TYPE_OPTIONS.includes(t))
+  }, [typeOptions])
 
   // Product type / finishes editor
   const [showTypeEditor, setShowTypeEditor] = useState(false)
@@ -383,8 +404,10 @@ export default function PortalProduct() {
         if (text) payload[`ingredients${suf}`] = text
       }
     }
-    const alc = parseFloat(normalizeNumeric(String(d.alcoholPct)))
-    if (!isNaN(alc) && alc >= 0) if (!isNaN(alc) && alc >= 0) payload.alcoholPct = alc / 100
+    // Beacon saves PATCH Airtable directly (no updateProduct), so the
+    // display→decimal conversion happens here, once.
+    const alcDecimal = alcoholDisplayToDecimal(normalizeNumeric(String(d.alcoholPct)))
+    if (alcDecimal !== undefined) payload.alcoholPct = alcDecimal
     if (d.editedName && d.editedName.trim()) {
       payload.productName = d.editedName.trim()
     }
@@ -454,8 +477,9 @@ export default function PortalProduct() {
           if (text) payload[`ingredients${suf}`] = text
         }
       }
+      // Display value (15 = 15%) — updateProduct converts to decimal once.
       const alc = parseFloat(normalizeNumeric(String(d.alcoholPct)))
-      if (!isNaN(alc) && alc >= 0) if (!isNaN(alc) && alc >= 0) payload.alcoholPct = alc / 100
+      if (!isNaN(alc) && alc >= 0) payload.alcoholPct = alc
       // Save edited title if provided
       if (d.editedName && d.editedName.trim()) {
         console.log('[doSave] Saving title:', d.editedName.trim())
@@ -586,8 +610,9 @@ export default function PortalProduct() {
             if (text) payload[`ingredients${suf}`] = text
           }
         }
+        // Display value (15 = 15%) — updateProduct converts to decimal once.
         const alc = parseFloat(normalizeNumeric(String(ed.alcoholPct)))
-        if (!isNaN(alc) && alc >= 0) if (!isNaN(alc) && alc >= 0) payload.alcoholPct = alc / 100
+        if (!isNaN(alc) && alc >= 0) payload.alcoholPct = alc
 
         // Include product type / finishes in title save payload
         if (ed.productTypeModified !== undefined) {
@@ -661,6 +686,50 @@ export default function PortalProduct() {
   const combinedTypeDisplay = composeProductTypeString(ed.productTypeModified || '', ed.finishesModified || [])
   const originalTypeClean = (ed.productTypeOriginal || '').replace(/^\(|\)$/g, '').trim()
   const isTypeModified = combinedTypeDisplay !== originalTypeClean && combinedTypeDisplay !== ''
+
+  // ── Product Type confirmation ─────────────────────────────────────────────
+  // Products still tagged with the retired generic "Spirit" (or with no type
+  // at all) must be re-tagged with a specific type before label generation:
+  // the legal denomination on the label derives from it.
+  const currentBaseType = (ed.productTypeModified || '').trim()
+  const rawAirtableType = (first.category || '').trim()
+  const needsTypeConfirm = !!first._recordId && (
+    !currentBaseType || RETIRED_TYPE_OPTIONS.includes(currentBaseType)
+    || RETIRED_TYPE_OPTIONS.some(t => new RegExp(`\\b${t}\\b`, 'i').test(rawAirtableType))
+  )
+
+  // Suggested type: keyword detection on name + Shopify type (never the
+  // retired generic). Seeds the banner dropdown, applied only on confirm.
+  const suggestedType = React.useMemo(() => {
+    if (!first.name) return ''
+    const det = detectDetailedCategory(first.name, rawAirtableType, first.shopifyType || '')
+    if (!det || RETIRED_TYPE_OPTIONS.includes(det)) return ''
+    return productTypeChoices.includes(det) ? det : ''
+  }, [first.name, rawAirtableType, first.shopifyType, productTypeChoices])
+
+  useEffect(() => { setTypePick(suggestedType) }, [suggestedType])
+
+  const confirmProductType = async () => {
+    const chosen = (typePick || '').trim()
+    if (!chosen || !items.length) return
+    setTypeConfirming(true)
+    try {
+      // Legacy combined strings ("Spirit Koshu") leave the unparsed type among
+      // the finishes — keep only real finish tags, like updateProductType does.
+      const cleanFinishes = (ed.finishesModified || []).filter(f => SAKE_FINISH_OPTIONS.includes(f))
+      const combined = composeProductTypeString(chosen, cleanFinishes)
+      for (const item of items) {
+        await updateProduct(item._recordId, { productType: combined })
+      }
+      setEd(prev => ({ ...prev, productTypeModified: chosen, finishesModified: cleanFinishes, productTypeOriginal: combined }))
+      setItems(prev => prev.map(i => ({ ...i, category: combined })))
+      if (mountedRef.current) setSaved(true)
+    } catch (err) {
+      console.error('[ProductType] Confirm failed:', err)
+      if (mountedRef.current) alert(`Errore nel salvataggio della tipologia: ${err.message}`)
+    }
+    if (mountedRef.current) setTypeConfirming(false)
+  }
 
   // Importers
   const importers = getImportersForRegion(printRegion)
@@ -989,6 +1058,46 @@ export default function PortalProduct() {
             </div>
           </div>
 
+          {/* Product Type confirmation — retired "Spirit" / missing type */}
+          {needsTypeConfirm && !showTypeEditor && (
+            <div className="portal-card" style={{ borderLeft: '3px solid #e67e22', background: '#fffaf3' }}>
+              <div className="portal-card-head">
+                <span className="portal-card-title">⚠️ {jp ? 'Tipologia da confermare (種類の確認)' : 'Tipologia da confermare'}</span>
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--portal-ink-soft)', marginBottom: 8 }}>
+                {RETIRED_TYPE_OPTIONS.some(t => new RegExp(`\\b${t}\\b`, 'i').test(rawAirtableType))
+                  ? 'La tipologia generica "Spirit" non è più valida: scegli quella specifica — determina la denominazione legale sull’etichetta.'
+                  : 'Questo prodotto non ha una tipologia: confermala — determina la denominazione legale sull’etichetta.'}
+              </div>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                <select
+                  className="portal-select"
+                  value={typePick}
+                  onChange={e => setTypePick(e.target.value)}
+                  style={{ flex: '1 1 180px' }}
+                >
+                  <option value="">— {jp ? '選択してください' : 'Seleziona tipologia'} —</option>
+                  {productTypeChoices.map(t => (
+                    <option key={t} value={t}>{t}{t === suggestedType ? (jp ? '（推奨）' : ' (suggerita)') : ''}</option>
+                  ))}
+                </select>
+                <button
+                  onClick={confirmProductType}
+                  disabled={!typePick || typeConfirming}
+                  style={{
+                    padding: '7px 14px', fontSize: 12, fontWeight: 700, borderRadius: 6,
+                    cursor: typePick && !typeConfirming ? 'pointer' : 'not-allowed',
+                    border: '1px solid #e67e22',
+                    background: typePick && !typeConfirming ? '#e67e22' : '#f5d8b8',
+                    color: 'white', fontFamily: 'var(--portal-font)',
+                  }}
+                >
+                  {typeConfirming ? (jp ? '保存中…' : 'Salvataggio…') : `✓ ${jp ? '確認' : 'Conferma tipologia'}`}
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Product Type / Finishes Editor */}
           {showTypeEditor && (
             <div className="portal-card" style={{ borderLeft: '3px solid #4a90d9' }}>
@@ -1013,7 +1122,7 @@ export default function PortalProduct() {
                   style={{ width: '100%' }}
                 >
                   <option value="">— {jp ? '選択なし' : 'Nessuna'} —</option>
-                  {SAKE_TYPE_OPTIONS.filter(Boolean).map(t => (
+                  {productTypeChoices.map(t => (
                     <option key={t} value={t}>{t}</option>
                   ))}
                 </select>

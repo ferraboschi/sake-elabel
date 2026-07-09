@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { LANG_OPTIONS, estimateTitleLines } from '../../config/constants'
 import { getImportersForRegion, REGION_CODE_LABELS } from '../../data/importers'
-import { isAirtableConfigured, updateProduct, composeProductTypeString } from '../../services/airtable'
+import { isAirtableConfigured, updateProduct, composeProductTypeString, fetchProductTypeOptions } from '../../services/airtable'
 import { detectDetailedCategory, getDefaultLegalDescription, getDefaultIngredients } from '../../services/categoryDetector'
 import TopBar from './TopBar'
 
@@ -54,6 +54,14 @@ const ProductEditor = ({
   const [re, setRe] = useState({})
   const [typeSaving, setTypeSaving] = useState(false)
   const [typeSaved, setTypeSaved] = useState(false)
+  const [typeOptions, setTypeOptions] = useState([])
+
+  useEffect(() => {
+    fetchProductTypeOptions().then(opts => {
+      // The retired generic "Spirit" must not be re-assigned
+      if (opts) setTypeOptions(opts.filter(t => !['Spirit', 'Spirits'].includes(t)))
+    })
+  }, [])
 
   // Initialize review data when product or language changes
   useEffect(() => {
@@ -104,7 +112,9 @@ const ProductEditor = ({
       ingredients: { [`ingredients${selectedLanguage.charAt(0).toUpperCase()}${selectedLanguage.slice(1)}`]: value },
       allergens: { [`allergens${selectedLanguage.charAt(0).toUpperCase()}${selectedLanguage.slice(1)}`]: value },
       alcoholPct: value ? { alcoholPct: parseFloat(value) } : null,
-      volumeMl: value ? { volumeMl: parseInt(value) } : null,
+      // Internal key for the Airtable "Size" field is `size` — `volumeMl` is
+      // only the normalized read-side name and isn't in the FIELDS map.
+      volumeMl: value ? { size: parseInt(value) } : null,
       countryOfOrigin: { countryOfOrigin: value },
       eanBox: { eanBox: value },
       productTypeCurrent: { productType: value },
@@ -343,11 +353,15 @@ const ProductEditor = ({
             </label>
             <input
               type="text"
+              list="product-type-options"
               value={re.productTypeCurrent || ''}
               onChange={e => updateField('productTypeCurrent', e.target.value)}
               placeholder={`${re.category || 'es: Tokubetsu Honjozo'} (lascia vuoto = usa originale)`}
               style={inputStyle}
             />
+            <datalist id="product-type-options">
+              {typeOptions.map(t => <option key={t} value={t} />)}
+            </datalist>
             <div style={{ marginTop: '4px', fontSize: '11px', color: '#8898aa' }}>
               Scrivi "Nessuna" per omettere la tipologia dal PDF. Lascia vuoto per usare la categoria rilevata.
             </div>
@@ -720,9 +734,8 @@ const SiblingPropagation = ({ product, allProducts, setAllProducts, reviewEdits,
             }
           }
           if (propagateData.alcoholPct) {
-            payload.alcoholPct = propagateData.alcoholPct <= 1
-              ? propagateData.alcoholPct
-              : propagateData.alcoholPct / 100
+            // Display value (15 = 15%) — updateProduct converts to decimal once.
+            payload.alcoholPct = propagateData.alcoholPct
           }
           if (propagateData.nutrition) {
             payload.energyKj = propagateData.nutrition.energy_kj

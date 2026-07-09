@@ -196,7 +196,8 @@ export function useProducts() {
           if (translatedAllergens[lang]) payload[`allergens${suffix}`] = translatedAllergens[lang]
         }
         if (alcoholValue !== null && !isNaN(alcoholValue)) {
-          payload.alcoholPct = alcoholValue <= 1 ? alcoholValue : alcoholValue / 100
+          // Display value (15 = 15%) — updateProduct converts to decimal once.
+          payload.alcoholPct = alcoholValue
         }
         await updateProduct(product._recordId, payload)
       } catch (err) {
