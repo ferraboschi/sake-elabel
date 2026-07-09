@@ -1,0 +1,29 @@
+name: CI
+
+# Safety net: build + tests must pass. Catches the broken commits that used to
+# reach main (see the "fix syntax error" history). Enable branch protection
+# (Settings → Branches → require "build-and-test") to block merges on red.
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - run: npm install
+
+      - name: Build
+        run: npm run build
+
+      - name: Test
+        run: npm test
