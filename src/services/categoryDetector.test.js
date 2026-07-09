@@ -37,6 +37,15 @@ describe('getDefaultLegalDescription — sake never becomes a spirit', () => {
     expect(getDefaultLegalDescription('Vino')).toBe('Vino')
     expect(getDefaultLegalDescription('Birra')).toBe('Birra')
   })
+  it('base type + appended finish resolves to the right family', () => {
+    // fruit sake with a finish must stay fruit (was wrongly falling to sake)
+    expect(getDefaultLegalDescription('Fruit Sake Nigori')).toBe('Bevanda alcolica a base di frutta')
+    expect(getDefaultLegalDescription('Sake ai frutti Nama')).toBe('Bevanda alcolica a base di frutta')
+    // sake + finish stays sake; spirit + finish stays empty
+    expect(getDefaultLegalDescription('Ginjo Nama')).toBe('Bevanda alcolica fermentata di riso (SAKE)')
+    expect(getDefaultLegalDescription('Gin Koshu')).toBe('')
+    expect(getDefaultLegalDescription('Kokuto Shochu Koshu')).toBe('Distillato giapponese di riso e zucchero di canna')
+  })
 })
 
 describe('detectDetailedCategory — tipologia line', () => {

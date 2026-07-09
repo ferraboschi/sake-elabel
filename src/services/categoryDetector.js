@@ -255,11 +255,18 @@ const NO_DESCRIPTION_TYPES = ['Rum', 'Gin', 'Vodka', 'Whisky']
 export function getDefaultLegalDescription(detectedCategory, lang = 'it') {
   if (!detectedCategory) return CATEGORY_DESCRIPTIONS._sake[lang] || CATEGORY_DESCRIPTIONS._sake.it
 
-  // Fruit / sake families
-  if (FRUIT_CATEGORIES.includes(detectedCategory)) {
+  // Fruit / sake families. Match on the BASE type even when finishes are
+  // appended (the portal passes "Fruit Sake Nigori", "Ginjo Nama", …): a fruit
+  // sake with a finish must still get the fruit denomination, not the sake one.
+  const dcLower = detectedCategory.toLowerCase()
+  const startsWithFamily = (list) => list.some(c => {
+    const f = c.toLowerCase()
+    return dcLower === f || dcLower.startsWith(f + ' ')
+  })
+  if (startsWithFamily(FRUIT_CATEGORIES)) {
     return CATEGORY_DESCRIPTIONS._fruit[lang] || CATEGORY_DESCRIPTIONS._fruit.it
   }
-  if (SAKE_CATEGORIES.includes(detectedCategory)) {
+  if (startsWithFamily(SAKE_CATEGORIES)) {
     return CATEGORY_DESCRIPTIONS._sake[lang] || CATEGORY_DESCRIPTIONS._sake.it
   }
 
