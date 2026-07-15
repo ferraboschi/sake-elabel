@@ -101,14 +101,16 @@ const normalizeFullWidth = (s) => s ? s.replace(/[\uff01-\uff5e]/g, c => String.
 const normalizeNumeric = (s) => s ? normalizeFullWidth(s).replace(/[^0-9.]/g, '') : s
 
 // ── Sake product types (Tipologia) ──
-// Local fallback when the Airtable schema isn't reachable. The generic
-// "Spirit" is retired: spirits must carry their specific type (Shochu, Gin, …).
+// Canonical list, always offered in the dropdown (merged with the live Airtable
+// schema options). The generic "Spirit" is retired: spirits must carry their
+// specific type. Shochu family: Honkaku (umbrella), Kokuto, Awamori.
 const SAKE_TYPE_OPTIONS = [
   '', // empty = no type selected
   'Daiginjo', 'Ginjo', 'Junmai', 'Junmai Daiginjo', 'Junmai Ginjo',
   'Junmai Genshu', 'Honjozo', 'Tokubetsu Honjozo', 'Tokubetsu Junmai',
-  'Futsushu', 'Sparkling', 'Fruit Sake', 'Shochu', 'Gin', 'Whisky',
-  'Awamori', 'Rum', 'Vodka', 'Birra', 'Vino',
+  'Futsushu', 'Sparkling', 'Fruit Sake',
+  'Honkaku Shochu', 'Kokuto Shochu', 'Awamori', 'Shochu',
+  'Gin', 'Whisky', 'Rum', 'Vodka', 'Birra', 'Vino',
 ]
 
 // Types that must not be assignable anymore (see banner "tipologia da confermare")
@@ -151,10 +153,12 @@ export default function PortalProduct() {
     fetchProductTypeOptions().then(opts => { if (opts) setTypeOptions(opts) })
   }, [])
 
-  // Live Airtable select options when reachable, local list otherwise —
-  // minus the retired generic "Spirit".
+  // Union of the live Airtable schema options and the canonical list, deduped
+  // and minus the retired generic "Spirit". The union guarantees the newer
+  // shochu types (Honkaku/Kokuto) are always offered even if not yet a choice in
+  // Airtable — saving one creates it there (updateProduct uses typecast).
   const productTypeChoices = React.useMemo(() => {
-    const base = (typeOptions || SAKE_TYPE_OPTIONS).filter(Boolean)
+    const base = [...(typeOptions || []), ...SAKE_TYPE_OPTIONS].filter(Boolean)
     return [...new Set(base)].filter(t => !RETIRED_TYPE_OPTIONS.includes(t))
   }, [typeOptions])
 
@@ -1040,11 +1044,19 @@ export default function PortalProduct() {
                           border: '1px solid #f0c27a', lineHeight: 1.3,
                         }}>MODIFICATO</span>
                       )}
-                      <span
+                      {/* Always-visible, explicit "change type" control so a
+                          confirmed/mis-picked type can always be re-selected. */}
+                      <button
                         onClick={() => setShowTypeEditor(v => !v)}
-                        style={{ cursor: 'pointer', fontSize: 13 }}
-                        title={jp ? 'Tipologia/Finiture編集' : 'Modifica Tipologia/Finiture'}
-                      >✏️</span>
+                        style={{
+                          cursor: 'pointer', fontSize: 11, fontWeight: 600,
+                          border: '1px solid var(--portal-border)', borderRadius: 10,
+                          background: showTypeEditor ? '#e8f2fc' : 'white',
+                          color: '#2a6cb8', padding: '1px 8px',
+                          fontFamily: 'var(--portal-font)', lineHeight: 1.4,
+                        }}
+                        title={jp ? 'タイプを変更' : 'Cambia la tipologia del prodotto'}
+                      >✏️ {jp ? '種類を変更' : 'Cambia tipologia'}</button>
                     </span>
                   )}
                   {first.countryOfOrigin && <span>🇯🇵 {first.countryOfOrigin}</span>}
