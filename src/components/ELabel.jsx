@@ -104,18 +104,6 @@ function parsePackagingMaterials(materialsStr) {
   return result
 }
 
-/**
- * Generate slug from product name (must match airtable.js normalizeRecord logic)
- */
-function makeSlug(name) {
-  return name.toLowerCase()
-    .replace(/[/]/g, '-')
-    .replace(/\s+/g, '-')
-    .replace(/[^a-z0-9\-]/g, '')
-    .replace(/-+/g, '-')
-    .replace(/^-|-$/g, '')
-}
-
 const ELabel = () => {
   const { productSlug } = useParams()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -125,7 +113,6 @@ const ELabel = () => {
   const [selectedCountry, setSelectedCountry] = useState(null)
   const [loading, setLoading] = useState(true)
   const [product, setProduct] = useState(null)
-  const [error, setError] = useState(null)
 
   // Fetch product data from Airtable (with static fallback)
   useEffect(() => {
@@ -138,7 +125,6 @@ const ELabel = () => {
 
     const loadProduct = async () => {
       setLoading(true)
-      setError(null)
 
       try {
         // Try Airtable first
@@ -248,7 +234,6 @@ const ELabel = () => {
         if (staticProduct) {
           setProduct(staticProduct)
         } else {
-          setError(err.message)
         }
       }
 

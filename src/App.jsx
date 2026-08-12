@@ -1,10 +1,10 @@
 import React, { lazy, Suspense } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { useAuth } from './contexts/AuthContext'
-import Dashboard from './components/Dashboard'
 import ELabel from './components/ELabel'
 
-// Lazy load heavy components
+// Lazy load heavy components (Dashboard pulls in the PDF stack — keep it lazy!)
+const Dashboard = lazy(() => import('./components/Dashboard'))
 const AdminPage = lazy(() => import('./components/admin/AdminPage'))
 const LabelArchive = lazy(() => import('./components/LabelArchive'))
 const Login = lazy(() => import('./components/Login'))

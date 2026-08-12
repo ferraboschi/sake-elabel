@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useTranslation } from 'react-i18next'
 import { useAuth } from '../contexts/AuthContext'
 import { fetchProducts, isAirtableConfigured } from '../services/airtable'
 import { getLabels, getLabelStats } from '../services/labelStore'
@@ -10,10 +9,9 @@ import { useGenerateLabel } from '../hooks/useGenerateLabel'
 import { autoFillIngredients } from '../services/ingredientTranslator'
 
 const Dashboard = () => {
-  const { t } = useTranslation()
   const navigate = useNavigate()
-  const { isAuthenticated, user, logout } = useAuth()
-  const { generate, generating } = useGenerateLabel()
+  const { isAuthenticated, logout } = useAuth()
+  const { generate } = useGenerateLabel()
 
   // Stats state
   const [stats, setStats] = useState(null)
@@ -240,13 +238,6 @@ const Dashboard = () => {
   }
 
   // Stat pill component
-  const StatPill = ({ value, label, color = '#222' }) => (
-    <div style={{ textAlign: 'center', minWidth: '60px' }}>
-      <div style={{ fontSize: '24px', fontWeight: 700, color, lineHeight: 1.1 }}>{value}</div>
-      <div style={{ fontSize: '11px', color: '#888', marginTop: '2px' }}>{label}</div>
-    </div>
-  )
-
   // Progress bar
   const ProgressBar = ({ value, max, color = '#4caf50', label }) => {
     const pct = max > 0 ? Math.round((value / max) * 100) : 0

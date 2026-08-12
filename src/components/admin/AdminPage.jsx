@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
-import { useTranslation } from 'react-i18next'
+import { useParams } from 'react-router-dom'
 import i18n from 'i18next'
-import { useAuth } from '../../contexts/AuthContext'
 import { isAirtableConfigured } from '../../services/airtable'
 import { getImportersForRegion, REGION_CODE_LABELS } from '../../data/importers'
 import { LANG_OPTIONS } from '../../config/constants'
@@ -43,9 +41,6 @@ const Toast = ({ message, onClose }) => {
 
 const AdminPage = () => {
   const { slug } = useParams()
-  const navigate = useNavigate()
-  const { t } = useTranslation()
-  const { user } = useAuth()
   const products = useProducts()
   const labelGen = useGenerateLabel()
   const [toast, setToast] = useState(null)
@@ -54,7 +49,7 @@ const AdminPage = () => {
   const [selectedLanguage, setSelectedLanguage] = useState('it')
   const [selectedRegion, setSelectedRegion] = useState('ITA')
   const [selectedImporterId, setSelectedImporterId] = useState('default-it')
-  const [importerVersion, setImporterVersion] = useState(0)
+  const [importerVersion] = useState(0)
 
   // Batch reprint
   const [reprintSlugs, setReprintSlugs] = useState(new Set())

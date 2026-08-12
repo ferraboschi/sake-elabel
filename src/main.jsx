@@ -8,8 +8,9 @@ import './i18n'
 import App from './App'
 import './App.css'
 
-// App version — logged on startup to verify CDN serves latest code
-window.__ELABEL_VERSION = '2026.04.03.1'
+// App version — auto-injected at build time (vite.config.js define).
+// Guarantees a fresh index bundle hash on every deploy (CDN cache bust).
+window.__ELABEL_VERSION = typeof __BUILD_VERSION__ !== 'undefined' ? __BUILD_VERSION__ : 'dev'
 
 // Force dedup cleanup on every app load (getLabels auto-deduplicates)
 try { getLabels() } catch { /* ignore */ }

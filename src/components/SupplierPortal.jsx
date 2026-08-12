@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { useSearchParams, Link } from 'react-router-dom'
-import { fetchProducts, updateProduct, isAirtableConfigured } from '../services/airtable'
+import { fetchProducts, updateProduct } from '../services/airtable'
 import { translateIngredients as autoTranslateIngredients, autoFillIngredients, detectLanguage as detectIngredientLang } from '../services/ingredientTranslator'
 import { useGenerateLabel } from '../hooks/useGenerateLabel'
 import { downloadBoxLabelPDF } from '../services/labelPrinter'
@@ -24,14 +24,6 @@ const normalizeFullWidth = (str) => {
     .replace(/[\uff01-\uff5e]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 0xfee0))
     // Full-width space → half-width space
     .replace(/\u3000/g, ' ')
-}
-
-/**
- * Normalize numeric input: full-width digits → half-width, strip non-numeric
- */
-const normalizeNumeric = (str) => {
-  if (!str) return str
-  return normalizeFullWidth(str).replace(/[^0-9.]/g, '')
 }
 
 // Only show beverage products (exclude books, merch, display items, etc.)
@@ -123,29 +115,7 @@ const INGREDIENT_SUGGESTIONS = {
   },
 }
 
-// IT↔JP ingredient translation map
-const INGREDIENT_TRANSLATIONS = [
-  { it: 'riso', jp: '米' },
-  { it: 'koji (aspergillus oryzae)', jp: '米麹' },
-  { it: 'koji', jp: '米麹' },
-  { it: 'acqua', jp: '水' },
-  { it: 'alcol distillato', jp: '醸造アルコール' },
-  { it: 'alcool distillato', jp: '醸造アルコール' },
-  { it: 'alcol', jp: '醸造アルコール' },
-  { it: 'sale', jp: '塩' },
-  { it: 'zucchero', jp: '砂糖' },
-  { it: 'lievito', jp: '酵母' },
-  { it: 'acido lattico', jp: '乳酸' },
-  { it: 'amido di riso', jp: '米デンプン' },
-  { it: 'glucosio', jp: 'ブドウ糖' },
-  { it: 'sciroppo di glucosio', jp: 'ブドウ糖果糖液糖' },
-  { it: 'prugna', jp: '梅' },
-  { it: 'yuzu', jp: 'ゆず' },
-  { it: 'miele', jp: 'はちみつ' },
-]
 const DEFAULT_PRINT_SETTINGS = { lang: 'it', regionCode: 'ITA', importerId: 'default-it', perText: '' }
-
-
 
 function isJunmai(category) {
   if (!category) return null // unknown
@@ -399,7 +369,7 @@ export default function SupplierPortal() {
   const saveGroupRef = useRef(null)  // keep latest saveGroup for autosave callback
   const [modalForm, setModalForm] = useState({ name: '', address: '', website: '', lang: 'it', regionCode: 'ITA' })
   const [allImporters, setAllImporters] = useState([])
-  const { generate, generating: generatingLabel, generateQR } = useGenerateLabel()
+  const { generate, generateQR } = useGenerateLabel()
   const [producerFilter, setProducerFilter] = useState(producerParam.replace(/[-_]/g, ' '))
   const [productFilter, setProductFilter] = useState('')
   const [passwordInput, setPasswordInput] = useState('')
@@ -727,7 +697,8 @@ export default function SupplierPortal() {
           if (text) payload[`ingredients${suffix}`] = text
         }
       }
-      // Save alcohol directly as percentage (no conversion)
+      // Alcohol: send as whole percentage (15.5) — airtable.js converts to
+      // decimal (0.155) because the Airtable field "Alcohol %" is type PERCENT
       if (!isNaN(alcoholVal) && alcoholVal >= 0) {
         payload.alcoholPct = alcoholVal
       }
@@ -916,12 +887,6 @@ export default function SupplierPortal() {
     }
   }
 
-  // Handle ingredient auto-translation when switching language
-  const getIngredientDisplay = (group) => {
-    const values = { ...getGroupEditValues(group), ...editData[group.items[0]._recordId] }
-    return values.ingredientsIt || ''
-  }
-
   // --- Unauthorized: show password login ---
   if (!isAuthorized) {
     return (
@@ -993,7 +958,6 @@ export default function SupplierPortal() {
   }
 
   const groupHasData = (group) => group.items.some(p => hasData(p))
-  const savedCount = Object.values(saved).filter(Boolean).length
   const copySourceGroup = copySource ? [...productGroups.entries()].find(([k]) => k === copySource) : null
 
   // Progress: count groups that have at least one generated label in archive
@@ -1482,9 +1446,7 @@ export default function SupplierPortal() {
                     const itemReprint = reprintStatus[item.code] || {}
                     const itemNeedsReprint = itemReprint.needsReprint
                     const itemIsPrinting = printingGroup === item._recordId
-                    const itemHasBoxEan = !!(item.barcodeBox || eanBoxEditData[item._recordId])
                     const itemHasBottlesPerBox = !!(getBottlesPerBoxValue(item))
-                    const itemCanPrintBox = itemCanPrint && itemHasBottlesPerBox
                     const itemIsPrintingBox = printingBoxGroup === item._recordId
                     const itemIsPrintingQR = printingQRGroup === item._recordId
                     const cellStyle = { display: 'flex', flexDirection: 'column', gap: '2px' }

@@ -163,15 +163,6 @@ export const searchLabels = (query = '', filters = {}) => {
 }
 
 /**
- * Delete a label by id
- */
-export const deleteLabel = (id) => {
-  const labels = getLabels().filter(l => l.id !== id)
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(labels))
-  return labels
-}
-
-/**
  * Get stats
  */
 export const getLabelStats = () => {
@@ -185,22 +176,6 @@ export const getLabelStats = () => {
   return { total: labels.length, byLanguage, byCountry }
 }
 
-/**
- * Regenerate (replace) a label in the store
- */
-export const regenerateLabel = (id, newData) => {
-  const labels = getLabels()
-  const updated = labels.map(l => {
-    if (l.id !== id) return l
-    return {
-      ...l,
-      ...newData,
-      generatedAt: new Date().toISOString(),
-    }
-  })
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(updated))
-  return updated
-}
 
 /**
  * Mark a label as downloaded — records timestamp of last download.
@@ -216,4 +191,4 @@ export const markLabelDownloaded = (id) => {
   return updated
 }
 
-export default { getLabels, saveLabels, searchLabels, deleteLabel, getLabelStats, regenerateLabel, markLabelDownloaded }
+export default { getLabels, saveLabels, searchLabels, getLabelStats, markLabelDownloaded }

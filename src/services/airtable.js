@@ -202,6 +202,38 @@ export const fetchProduct = async (recordId) => {
 }
 
 /**
+ * Aliases: internal keys used by some components that map to a different FIELDS key
+ */
+const KEY_ALIASES = { volumeMl: 'size' }
+
+/**
+ * Map internal keys to Airtable field names and normalize values for writing.
+ * - alcoholPct: callers pass DISPLAY values (15.5 = 15.5%); the Airtable field
+ *   "Alcohol %" is type PERCENT and stores decimals (0.155). Conversion happens
+ *   here — and only here — via alcoholDisplayToDecimal.
+ * - Unknown keys are skipped with a console warning (no more silent drops).
+ */
+function buildAirtableFields(fields) {
+  const airtableFields = {}
+  for (const [rawKey, value] of Object.entries(fields)) {
+    const key = KEY_ALIASES[rawKey] || rawKey
+    const fieldDef = FIELDS[key]
+    if (!fieldDef) {
+      if (value !== undefined) console.warn(`[Airtable] Unknown field key "${rawKey}" — skipped`)
+      continue
+    }
+    if (value === undefined) continue
+    if (key === 'alcoholPct') {
+      const decimal = alcoholDisplayToDecimal(value)
+      if (decimal !== undefined) airtableFields[fieldDef.name] = decimal
+      continue
+    }
+    airtableFields[fieldDef.name] = value
+  }
+  return airtableFields
+}
+
+/**
  * Update a product record with e-label data
  * Accepts an object with keys matching FIELDS keys
  */
@@ -211,20 +243,9 @@ export const updateProduct = async (recordId, fields) => {
     return false
   }
 
-  // Alcohol: UI uses display values (15 = 15%), Airtable stores as decimal (0.15).
-  // This is the ONLY place the conversion happens — callers must pass display values.
-  if (fields.alcoholPct !== undefined && fields.alcoholPct !== null) {
-    fields = { ...fields, alcoholPct: alcoholDisplayToDecimal(fields.alcoholPct) }
-  }
-
-  // Map internal keys to Airtable field names (PATCH uses field names)
-  const airtableFields = {}
-  for (const [key, value] of Object.entries(fields)) {
-    const fieldDef = FIELDS[key]
-    if (fieldDef && value !== undefined) {
-      airtableFields[fieldDef.name] = value
-    }
-  }
+  // buildAirtableFields handles key aliases, unknown-key warnings, and the
+  // alcohol display→decimal conversion (callers pass display values, e.g. 15.5)
+  const airtableFields = buildAirtableFields(fields)
 
   const url = `${API_BASE}/${AIRTABLE_BASE_ID}/${PRODUCT_TABLE_ID}/${recordId}`
   const response = await fetchWithRetry(url, {
@@ -255,20 +276,10 @@ export const batchUpdateProducts = async (records) => {
   }
 
   for (const batch of batches) {
-    const airtableRecords = batch.map(rec => {
-      // Alcohol: UI uses display values (15 = 15%), Airtable stores as decimal (0.15)
-      const fields = (rec.fields.alcoholPct !== undefined && rec.fields.alcoholPct !== null)
-        ? { ...rec.fields, alcoholPct: alcoholDisplayToDecimal(rec.fields.alcoholPct) }
-        : rec.fields
-      const airtableFields = {}
-      for (const [key, value] of Object.entries(fields)) {
-        const fieldDef = FIELDS[key]
-        if (fieldDef && value !== undefined) {
-          airtableFields[fieldDef.name] = value
-        }
-      }
-      return { id: rec.id, fields: airtableFields }
-    })
+    const airtableRecords = batch.map(rec => ({
+      id: rec.id,
+      fields: buildAirtableFields(rec.fields),
+    }))
 
     const url = `${API_BASE}/${AIRTABLE_BASE_ID}/${PRODUCT_TABLE_ID}`
     const response = await fetchWithRetry(url, {

@@ -666,7 +666,6 @@ const SiblingPropagation = ({ product, allProducts, setAllProducts, reviewEdits,
   if (siblings.length === 0) return null
 
   // Fields that are shared across siblings (NOT volume-specific like EAN, volume)
-  const sharedFields = ['ingredients', 'allergens', 'alcoholPct', 'nutrition', 'countryOfOrigin', 'seimaibuai']
 
   const handlePropagate = async () => {
     setPropagating(true)

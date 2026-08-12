@@ -18,7 +18,7 @@ const Badge = ({ color, bg, children }) => (
 )
 
 const ProductList = ({
-  products, labelsMap, reprintStatus, selectedLanguage,
+  products, labelsMap, reprintStatus,
   reprintSlugs, setReprintSlugs, generating, onGenerateReprint,
 }) => {
   const navigate = useNavigate()
