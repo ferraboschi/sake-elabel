@@ -191,7 +191,11 @@ const LABEL_W = 55          // label width
 const MARGIN = 2.5          // content margin
 const PITTO_SIZE = 6.1      // pittogramma icon
 const QR_SIZE = 13           // QR code (EU minimum)
-const BARCODE_COL_W = 14    // barcode column width — wider for max barcode size
+const BARCODE_COL_W = 16    // barcode column width (14 → 16: +1.5× barcode for scanner readability)
+// Minimum length (mm) of the barcode zone along the label. Before: the zone was only as tall
+// as the text beside it (~28 mm → EAN-13 at ~75% magnification, unreadable by optical scanners).
+// Now the zone is extended to at least this value so the barcode prints ~1.5× larger (~113%).
+const BARCODE_MIN_ZONE_H = 43
 const BLEED = 5             // bleed area for crop marks
 
 // Separator line
@@ -490,6 +494,8 @@ export const generateLabelPDF = async (rawLabel, options = {}) => {
 
   // ── BARCODE ZONE END ──
   cy += 0.8
+  // Extend the zone so the barcode can print at readable size (mirrored in render pass)
+  if (barcodeImg && cy - bcStartY < BARCODE_MIN_ZONE_H) cy = bcStartY + BARCODE_MIN_ZONE_H
   const bcEndY = cy
 
   // Footer sep + spacing
@@ -726,6 +732,8 @@ export const generateLabelPDF = async (rawLabel, options = {}) => {
 
   // ── BARCODE ZONE END ──
   y += 0.8
+  // Mirror of pass 1: extend the zone to the minimum barcode length
+  if (barcodeImg && y - renderBcStartY < BARCODE_MIN_ZONE_H) y = renderBcStartY + BARCODE_MIN_ZONE_H
   const renderBcEndY = y
 
   // ── BARCODE IMAGE (vertical, right column) — maximize size, preserve aspect ──
